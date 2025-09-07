@@ -355,15 +355,15 @@ def bin_similarity(manual_ranges, auto_ranges):
         differences = 1 - auto_ranges/manual_ranges[:auto_ranges.shape[0]]
     else:
         differences = 1 - auto_ranges[:manual_ranges.shape[0]]/manual_ranges
-    print("subtracted", differences)
+    #print("subtracted", differences)
     differences = differences**2
-    print("squared", differences)
+    #print("squared", differences)
     differences = np.nan_to_num(differences,nan=0, posinf=0, neginf=0)
-    print("na removed", differences)
+    #print("na removed", differences)
     differences = np.sum(differences)
-    print("summed", differences)
+    #print("summed", differences)
     differences = differences ** 0.5
-    print("sqrt", differences)
+    #print("sqrt", differences)
     return differences
 
 # --------- Input file name (csv) ---------
