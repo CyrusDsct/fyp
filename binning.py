@@ -327,14 +327,26 @@ def pretty_bins(data, bins):
 
 # --------- Similarity  ---------
 def bin_similarity(manual_ranges, auto_ranges):
-    overlap = 0
-    for m in manual_ranges:
-        for a in auto_ranges:
-            start = max(m[0], a[0])
-            end = min(m[1], a[1])
-            overlap += max(0, end - start)
-    manual_total = np.sum([m[1] - m[0] for m in manual_ranges])
-    return overlap / manual_total if manual_total > 0 else 0
+    # overlap = 0
+    # for m in manual_ranges:
+    #     for a in auto_ranges:
+    #         start = max(m[0], a[0])
+    #         end = min(m[1], a[1])
+    #         overlap += max(0, end - start)
+    # manual_total = np.sum([m[1] - m[0] for m in manual_ranges])
+    # return overlap / manual_total if manual_total > 0 else 0
+    
+    #EUCLIDEAN
+    if (manual_ranges.shape == auto_ranges.shape):
+        differences = manual_ranges-auto_ranges
+    elif (manual_ranges.size > auto_ranges.size):
+        differences = manual_ranges[:auto_ranges.shape[0]] - auto_ranges
+    else:
+        differences = manual_ranges - auto_ranges[:manual_ranges.shape[0]]
+    differences = differences**2
+    differences = np.sum(differences)
+    differences = differences ** 0.5
+    return differences
 
 # --------- Input file name (csv) ---------
 filename = input("Input the name of the csv file (without folder or .csv):\n")
