@@ -336,16 +336,34 @@ def bin_similarity(manual_ranges, auto_ranges):
     # manual_total = np.sum([m[1] - m[0] for m in manual_ranges])
     # return overlap / manual_total if manual_total > 0 else 0
     
-    #EUCLIDEAN
+    # #EUCLIDEAN
+    # if (manual_ranges.shape == auto_ranges.shape):
+    #     differences = manual_ranges-auto_ranges
+    # elif (manual_ranges.size > auto_ranges.size):
+    #     differences = manual_ranges[:auto_ranges.shape[0]] - auto_ranges
+    # else:
+    #     differences = manual_ranges - auto_ranges[:manual_ranges.shape[0]]
+    # differences = differences**2
+    # differences = np.sum(differences)
+    # differences = differences ** 0.5
+    # return differences
+
+    #NORMALIZED EUCLIDEAN
     if (manual_ranges.shape == auto_ranges.shape):
-        differences = manual_ranges-auto_ranges
+        differences = 1 - auto_ranges/manual_ranges
     elif (manual_ranges.size > auto_ranges.size):
-        differences = manual_ranges[:auto_ranges.shape[0]] - auto_ranges
+        differences = 1 - auto_ranges/manual_ranges[:auto_ranges.shape[0]]
     else:
-        differences = manual_ranges - auto_ranges[:manual_ranges.shape[0]]
+        differences = 1 - auto_ranges[:manual_ranges.shape[0]]/manual_ranges
+    print("subtracted", differences)
     differences = differences**2
+    print("squared", differences)
+    differences = np.nan_to_num(differences,nan=0, posinf=0, neginf=0)
+    print("na removed", differences)
     differences = np.sum(differences)
+    print("summed", differences)
     differences = differences ** 0.5
+    print("sqrt", differences)
     return differences
 
 # --------- Input file name (csv) ---------
