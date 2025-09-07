@@ -10,9 +10,14 @@ filename = "csv/"&filename&".csv"
 dataset = pd.read_csv(filename)
 print(dataset.to_string()) #for checking
 
-#what is the expected format for the csv? column 1 is location and column 2 is value?
-max_data = dataset[dataset.columns[1]].max()
-min_data = dataset[dataset.columns[1]].min()
+column = input("Please enter the column number containing the data that you would like to bin by. (First column = 1)")
+while (not(column.isdigit())):
+    num_bins = input("Please enter an integer number of bins.")
+column = dataset.columns[int(column)]
+print("You are binning by "& column&".")
+
+max_data = dataset[column].max()
+min_data = dataset[column].min()
 print("Maximum value in dataset: " & str(max_data))
 print("Minimum value in dataset: " & str(min_data))
 
@@ -41,6 +46,9 @@ num_data = dataset.shape[0]
 sorted_data = dataset.sort_values(by=dataset.columns[1])
 
 #available variables: num_data, max_data, min_data, sorted dataframe
+#num_data = number of data entries in dataset
+#max_data, min_data = maximum and minimum values in data
+#use sorted dataframe as global value
 
 #find bins using all binning methods
 #put into functions? store in array or dataframe?
