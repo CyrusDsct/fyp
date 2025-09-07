@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import pandas as pd
 
@@ -16,7 +17,7 @@ print(dataset.to_string()) #for checking
 value_col = input("Please enter the column number containing the data that you would like to bin by. (First column = 1)")
 while(not(value_col.isdigit())):
     num_bins = input("Please enter an integer number of bins.")
-value_col = dataset.columns[int(column)]
+value_col = dataset.columns[int(value_col)]
 print("You are binning by "& value_col &".")
 
 max_data = dataset[value_col].max()
@@ -90,10 +91,46 @@ def equal_bins(minimum, maximum, bins):
     
 
 #geometric
+def geometric(min, max, bins):
+    #end (max) = start (min) * ratio ^ (num_bins -1)
+    log_of_ratio = math.log(x=float(max)/min, base=math.e) / (bins-1)
+    ratio = math.exp(log_of_ratio)
+    result = np.empty((bins, 2))
+    for i in range(bins):
+        result[i,0] = (min * (ratio**i))
+        result[i,1] = min * (ratio**(i+1))
+    return result
 
 #exponential
-#num_data in nth bin = x^(nth bin) - x^(n-1th bin)
+#num_data in nth bin = x^(nth bin)
+#sum of all bins = num_data
+def exponential(num_data, data, bins):
+    log_of_ratio = math.log(x=float(num_data),base=math.e) / (bins-1)
+    ratio = math.exp(log_of_ratio)
+    result = np.empty((bins,2))
+    edges = [1]
+    for i in range(1,bins):
+        edges.append(math.trunc(ratio**i + sum(edges)))
+    edges = edges - 1
+    for i in range(bins):
+        result[i,0] = data[edges[i]]
+        result[i,1] = data[edges[i+1]-1]
+    return result
+
 #reverse exponential
+def rev_exponential(num_data,data,bins):
+    log_of_ratio = math.log(x=float(num_data),base=math.e) / (bins-1)
+    ratio = math.exp(log_of_ratio)
+    result = np.empty((bins,2))
+    result = np.empty((bins,2))
+    edges = [1]
+    for i in range(1,bins):
+        edges.append(math.trunc(ratio**i + sum(edges)))
+    edges = edges - 1
+    for i in range(bins):
+        result[i,0] = data[-(edges[i]+1)]
+        result[i,1] = data[-(edges[i+1])]
+    return result
 
 #quantile
 def quantile_bins(data, bins):
