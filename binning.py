@@ -326,46 +326,61 @@ def pretty_bins(data, bins):
     return np.unique(edges)
 
 # --------- Similarity  ---------
-def bin_similarity(manual_ranges, auto_ranges):
-    # overlap = 0
-    # for m in manual_ranges:
-    #     for a in auto_ranges:
-    #         start = max(m[0], a[0])
-    #         end = min(m[1], a[1])
-    #         overlap += max(0, end - start)
-    # manual_total = np.sum([m[1] - m[0] for m in manual_ranges])
-    # return overlap / manual_total if manual_total > 0 else 0
+# def bin_similarity(manual_ranges, auto_ranges):
+#     # overlap = 0
+#     # for m in manual_ranges:
+#     #     for a in auto_ranges:
+#     #         start = max(m[0], a[0])
+#     #         end = min(m[1], a[1])
+#     #         overlap += max(0, end - start)
+#     # manual_total = np.sum([m[1] - m[0] for m in manual_ranges])
+#     # return overlap / manual_total if manual_total > 0 else 0
     
-    # #EUCLIDEAN
-    # if (manual_ranges.shape == auto_ranges.shape):
-    #     differences = manual_ranges-auto_ranges
-    # elif (manual_ranges.size > auto_ranges.size):
-    #     differences = manual_ranges[:auto_ranges.shape[0]] - auto_ranges
-    # else:
-    #     differences = manual_ranges - auto_ranges[:manual_ranges.shape[0]]
-    # differences = differences**2
-    # differences = np.sum(differences)
-    # differences = differences ** 0.5
-    # return differences
+#     # #EUCLIDEAN
+#     # if (manual_ranges.shape == auto_ranges.shape):
+#     #     differences = manual_ranges-auto_ranges
+#     # elif (manual_ranges.size > auto_ranges.size):
+#     #     differences = manual_ranges[:auto_ranges.shape[0]] - auto_ranges
+#     # else:
+#     #     differences = manual_ranges - auto_ranges[:manual_ranges.shape[0]]
+#     # differences = differences**2
+#     # differences = np.sum(differences)
+#     # differences = differences ** 0.5
+#     # return differences
 
-    #NORMALIZED EUCLIDEAN
-    if (manual_ranges.shape == auto_ranges.shape):
-        differences = 1 - auto_ranges/manual_ranges
-    elif (manual_ranges.size > auto_ranges.size):
-        differences = 1 - auto_ranges/manual_ranges[:auto_ranges.shape[0]]
+#     #NORMALIZED EUCLIDEAN
+#     if (manual_ranges.shape == auto_ranges.shape):
+#         differences = 1 - auto_ranges/manual_ranges
+#     elif (manual_ranges.size > auto_ranges.size):
+#         differences = 1 - auto_ranges/manual_ranges[:auto_ranges.shape[0]]
+#     else:
+#         differences = 1 - auto_ranges[:manual_ranges.shape[0]]/manual_ranges
+#     #print("subtracted", differences)
+#     differences = differences**2
+#     #print("squared", differences)
+#     differences = np.nan_to_num(differences,nan=0, posinf=0, neginf=0)
+#     #print("na removed", differences)
+#     differences = np.sum(differences)
+#     #print("summed", differences)
+#     differences = differences ** 0.5
+#     #print("sqrt", differences)
+#     return differences
+
+def bin_similarity(manual_ranges, auto_ranges):
+    overlap = 0
+    for m in manual_ranges:
+        for a in auto_ranges:
+            start = max(m[0], a[0])
+            end = min(m[1], a[1])
+            if end - start > 0:
+                overlap += end - start
+    manual_total = 0
+    for m in manual_ranges:
+        manual_total += m[1] - m[0]
+    if manual_total > 0:
+        return (overlap / manual_total) * 100
     else:
-        differences = 1 - auto_ranges[:manual_ranges.shape[0]]/manual_ranges
-    #print("subtracted", differences)
-    differences = differences**2
-    #print("squared", differences)
-    differences = np.nan_to_num(differences,nan=0, posinf=0, neginf=0)
-    #print("na removed", differences)
-    differences = np.sum(differences)
-    #print("summed", differences)
-    differences = differences ** 0.5
-    #print("sqrt", differences)
-    return differences
-
+        return 0  
 # --------- Input file name (csv) ---------
 filename = input("Input the name of the csv file (without folder or .csv):\n")
 filename = "csv/" + filename + ".csv"
@@ -444,8 +459,7 @@ for method, meta in method_bins.items():
     similarity.append((method, sim))
 similarity.sort(key=lambda x: -x[1])
 for method, sim in similarity:
-    print(f"{method}: {sim:.3f}")
-
+    print(f"{method}: {sim:.2f}%")
 # --------- Output (Graph) ---------
 for method, meta in method_bins.items():
     print(f"\n=== {method} ===")
