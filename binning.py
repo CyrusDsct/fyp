@@ -1,217 +1,58 @@
-# import numpy as np
-# import pandas as pd
-
-# #find file for importing csv values
-# #csv folder is expected to be located in the same place as this python file
-# #csv files are expected to be in the csv folder
-# filename = input(
-#     "Input the name of the csv file to be used in this analysis.\n"
-#     "Do not use any folder prefixes or file type suffixes.. (e.g.: 'air_pollution', not 'csv/air_pollution.csv').\n"
-# )
-# filename = "csv/" + filename + ".csv"
-# dataset = pd.read_csv(filename)
-# print(dataset.to_string()) #for checking
-
-
-# value_col = input("Please enter the column number containing the data that you would like to bin by. (First column = 1)")
-# while(not(value_col.isdigit())):
-#     num_bins = input("Please enter an integer number of bins.")
-# value_col = dataset.columns[int(column)]
-# print("You are binning by "& value_col &".")
-
-# max_data = dataset[value_col].max()
-# min_data = dataset[value_col].min()
-# num_data = dataset.shape[0]
-# values = dataset[value_col].values
-# sorted_values = np.sort(values)
-
-# print("Maximum value in dataset: " + str(max_data))
-# print("Minimum value in dataset: " + str(min_data))
-
-
-# #input number of bins
-# num_bins = input("How many bins are in this chloropleth map? ")
-# while not num_bins.isdigit():
-#     num_bins = input("Please enter an integer number of bins. ")
-# num_bins = int(num_bins)
-
-# #definition: a value is sorted into a bin if its value is min <= x <max
-# manual_bins = np.empty((num_bins, 2))
-
-# #input bin ranges
-# for i in range(num_bins):
-#     start = input("Input the starting value of bin #" + str(i) + ". ")
-#     while True:
-#         try:
-#             start_val = float(start)
-#             break
-#         except ValueError:
-#             start = input("Please enter a numerical value for the bin's starting value. ")
-#     manual_bins[i, 0] = start_val
-
-#     end = input("Input the end value of bin #" + str(i) + ". ")
-#     while True:
-#         try:
-#             end_val = float(end)
-#             break
-#         except ValueError:
-#             end = input("Please enter a numerical value for the bin's end value. ")
-#     manual_bins[i, 1] = end_val
-
-# #find bins using all binning methods
-# #put into functions? store in array or dataframe?
-
-# # methods = [
-# #     "equal",
-# #     "geometric",
-# #     "exponential",
-# #     "quantile",
-# #     "percentile",
-# #     "boxplot",
-# #     "stdev",
-# #     "maxbreaks",
-# #     "natbreaks",
-# #     "ck",
-# #     "htbreaks", #may not include as it is for two bins only
-# #     "resiliency" #how to implement???
-# # ]
-
-# method_bins = {}
-
-# #equal
-# def equal_bins(minimum, maximum, bins):
-#     interval = float(maximum - minimum) / bins
-#     edges = [minimum + i * interval for i in range(bins + 1)]
-#     result = np.empty((bins, 2))
-#     for i in range(bins):
-#         result[i, 0] = edges[i]
-#         result[i, 1] = edges[i + 1]
-#     return result
-    
-
-# #geometric
-
-# #exponential
-# #num_data in nth bin = x^(nth bin) - x^(n-1th bin)
-# #reverse exponential
-
-# #quantile
-# def quantile_bins(data, bins):
-#     quantiles = np.linspace(0, 1, bins + 1)
-#     edges = np.quantile(data, quantiles)
-#     result = np.empty((bins, 2))
-#     for i in range(bins):
-#         result[i, 0] = edges[i]
-#         result[i, 1] = edges[i + 1]
-#     return result
-
-# #percentile
-
-# def percentile_bins(num_data, bins):
-#     # To be implemented
-#     pass
-
-# #box plot
-
-# #standard deviation (stdev)
-
-# #maximum breaks (maxbreaks)
-# def maxbreaks_bins(data, bins):
-#     arr = np.sort(data)
-#     diffs = arr[1:] - arr[:-1]
-#     if len(diffs) < bins:
-#         edges = np.array([arr[0], arr[-1]])
-#     else:
-#         max_indices = np.argpartition(diffs, -bins)[-bins:]
-#         max_indices = np.sort(max_indices)
-#         edges = np.concatenate(([arr[0]], arr[max_indices + 1], [arr[-1]]))
-#     result = np.empty((bins, 2))
-#     for i in range(bins):
-#         result[i, 0] = edges[i]
-#         result[i, 1] = edges[i + 1]
-#     return result
-
-# #natural breaks (natbreaks)
-# #ck means (ck)
-# #head tail breaks (htbreaks) #may not include as it is for two bins only
-# #resiliency? #how to implement???
-
-# #go through all bins to find difference
-
-# #output most similar binning method
-# #output bins for comparison
-
-# #graph to show data distribution with manual + other bins?
-# #bar? use arpit's thing? ???
-
-# method_bins['equal'] = equal_bins(min_data, max_data, num_bins)
-# method_bins['quantile'] = quantile_bins(values, num_bins)
-# method_bins['maxbreaks'] = maxbreaks_bins(values, num_bins)
-
-
-# #similarity part (temp)
-# def bin_similarity(manual, auto):
-#     overlap = 0
-#     for m, a in zip(manual, auto):
-#         start = max(m[0], a[0])
-#         end = min(m[1], a[1])
-#         overlap += max(0, end - start)
-
-#     manual_total = np.sum(manual[:,1] - manual[:,0])
-#     return overlap / manual_total if manual_total > 0 else 0
-
-# similarity_result = []
-# for method, bins in method_bins.items():
-#     sim = bin_similarity(manual_bins, bins)
-#     similarity_result.append((method, sim))
-
-# similarity_result.sort(key=lambda x: -x[1])
-# print()
-# for method, score in similarity_result:
-#     print(f"{method} similarity: {score:.3f}")
-
-# print("Your input:")
-# print(manual_bins)
-
-# for method, bins in method_bins.items():
-#     print(f"\n{method} bins:")
-#     print(bins)
-    
-
-# Cyrus's idea
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-# --------- assigns each value in raw_data to a bin ---------
+# Assign value in data to bin
 def bin_metadata(raw_data, bin_edges):
+    bin_edges = np.unique(np.sort(bin_edges))
     bin_assignments = np.digitize(raw_data, bin_edges, right=False) - 1
-    bin_assignments[bin_assignments == len(bin_edges) - 1] = len(bin_edges) - 2
-    bin_sizes = pd.Series(bin_assignments).value_counts().sort_index()
+    i = 0
+    while i < len(bin_assignments):
+        if bin_assignments[i] == len(bin_edges) - 1:
+            bin_assignments[i] = len(bin_edges) - 2
+        i += 1
+
+    s = pd.Series(bin_assignments)
+    bin_sizes_series = s.value_counts().sort_index()
+    # Convert to dict with integer keys
+    bin_sizes = {}
+    for idx in bin_sizes_series.index:
+        bin_sizes[int(idx)] = int(bin_sizes_series.loc[idx])
+
+    bin_breaks = []
+    k = 0
+    while k < len(bin_edges):
+        bin_breaks.append(float(bin_edges[k]))
+        k += 1
+
     return {
         "rawData": raw_data,
         "dataRange": [float(raw_data.min()), float(raw_data.max())],
-        "binCount": len(bin_edges) -1,
-        "binBreaks": [float(x) for x in bin_edges],
-        "binSizes": bin_sizes.to_dict(),
+        "binCount": len(bin_edges) - 1,
+        "binBreaks": bin_breaks,
+        "binSizes": bin_sizes,
         "dataBinAssignments": bin_assignments.tolist()
     }
 
-# ---------  Binning Algorithms---------
-import numpy as np
 
+# All Binning Algorithms
 def equal_interval(data, bins):
-    minv, maxv = data.min(), data.max()
+    minv = data.min()
+    maxv = data.max()
     interval = (maxv - minv) / bins
     edges = []
-    for i in range(bins + 1):
+    i = 0
+    while i < (bins + 1):
         edge = minv + i * interval
         edges.append(edge)
+        i += 1
     return np.array(edges)
 
+
 def defined_interval(data, interval):
-    minv, maxv = data.min(), data.max()
+    minv = data.min()
+    maxv = data.max()
     edges = [minv]
     while edges[-1] < maxv:
         next_edge = edges[-1] + interval
@@ -221,49 +62,101 @@ def defined_interval(data, interval):
         edges.append(next_edge)
     return np.array(edges)
 
+
 def exponential_bins(data, bins):
     N = len(data)
-    powers = np.array([2 ** i for i in range(bins)])
+    powers = []
+    i = 0
+    while i < bins:
+        powers.append(2 ** i)
+        i += 1
+    powers = np.array(powers)
+
     sizes = powers / powers.sum() * N
     sizes = np.round(sizes).astype(int)
-    sizes[-1] = N - sizes[:-1].sum()
+    if len(sizes) > 1:
+        sizes[-1] = int(N - sizes[:-1].sum())
+    else:
+        sizes[-1] = int(N)
+
     sorted_data = np.sort(data)
     breaks = [sorted_data[0]]
     idx = 0
-    for size in sizes[:-1]:
-        idx += size
-        breaks.append(sorted_data[min(idx, N-1)])
+    j = 0
+    while j < (len(sizes) - 1):
+        idx += int(sizes[j])
+        if idx < 0:
+            idx = 0
+        if idx > N - 1:
+            idx = N - 1
+        breaks.append(sorted_data[idx])
+        j += 1
     breaks.append(sorted_data[-1])
-    return np.unique(breaks)
+    uniq = []
+    p = 0
+    while p < len(breaks):
+        val = breaks[p]
+        if val not in uniq:
+            uniq.append(val)
+        p += 1
+    return np.array(uniq)
+
 
 def geometric_interval(data, bins):
-    minv, maxv = data.min(), data.max()
+    minv = data.min()
+    maxv = data.max()
     if minv <= 0:
-        minv = np.min(data[data > 0])  
-    ratio = (maxv / minv) ** (1/ bins)
+        positive = data[data > 0]
+        if len(positive) > 0:
+            minv = float(np.min(positive))
+        else:
+            minv = 1e-9
+    ratio = (maxv / minv) ** (1.0 / bins)
     edges = [minv]
-    for i in range(1, bins):
+    i = 1
+    while i < bins:
         edges.append(minv * (ratio ** i))
+        i += 1
     edges.append(maxv)
     return np.array(edges)
+
 
 def maxbreaks_bins(data, bins):
     arr = np.sort(data)
     diffs = arr[1:] - arr[:-1]
-    if len(diffs) < bins -1:
+    if len(diffs) < bins - 1:
         edges = [arr[0], arr[-1]]
     else:
-        max_indices = np.argsort(diffs)[-(bins-1):]
-        max_indices = np.sort(max_indices)
+        idxs = np.argsort(diffs)
+        selected = idxs[-(bins - 1):]
+        selected_sorted = np.sort(selected)
         edges = [arr[0]]
-        for idx in max_indices:
-            edges.append(arr[idx + 1])
+        m = 0
+        while m < len(selected_sorted):
+            edges.append(arr[selected_sorted[m] + 1])
+            m += 1
         edges.append(arr[-1])
-    return np.unique(edges)
+
+    uniq = []
+    t = 0
+    while t < len(edges):
+        v = edges[t]
+        if v not in uniq:
+            uniq.append(v)
+        t += 1
+    return np.array(uniq)
+
 
 def quantile_bins(data, bins):
-    edges = [np.quantile(data, q) for q in np.linspace(0, 1, bins + 1)]
+    edges = []
+    qs = np.linspace(0, 1, bins + 1)
+    i = 0
+    while i < len(qs):
+        q = qs[i]
+        edges.append(np.quantile(data, q))
+        i += 1
     return np.array(edges)
+
 
 def boxplot_bins(data):
     q1 = np.percentile(data, 25)
@@ -273,33 +166,48 @@ def boxplot_bins(data):
     lower = q1 - 1.5 * iqr
     upper = q3 + 1.5 * iqr
     edges = [data.min(), lower, q1, q2, q3, upper, data.max()]
-    return np.unique(edges)
+    uniq = []
+    i = 0
+    while i < len(edges):
+        if edges[i] not in uniq:
+            uniq.append(edges[i])
+        i += 1
+    return np.array(uniq)
 
-# def percentile_bins(data, percentiles=[ ]):
-#     edges = [data.min()]
-#     for p in percentiles:
-#         edges.append(np.percentile(data, p))
-#     edges.append(data.max())
-#     return np.unique(edges)
 
 def stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0):
     mu = np.mean(data)
     sigma = np.std(data)
+    edges = []
     if mean_as_boundary:
-        edges = [mu + (i - bins // 2) * sdfactor * sigma for i in range(bins + 1)]
+        i = 0
+        while i < (bins + 1):
+            edges.append(mu + (i - bins // 2) * sdfactor * sigma)
+            i += 1
     else:
         if bins % 2 == 0:
             raise ValueError('Variant 2 only works for odd bin count.')
         mid = bins // 2
-        edges = [mu + (i - mid - 0.5) * sdfactor * sigma for i in range(bins + 1)]
-    edges = [data.min()] + edges + [data.max()]
-    return np.unique(edges)
+        i = 0
+        while i < (bins + 1):
+            edges.append(mu + (i - mid - 0.5) * sdfactor * sigma)
+            i += 1
+    new_edges = []
+    new_edges.append(data.min())
+    p = 0
+    while p < len(edges):
+        new_edges.append(edges[p])
+        p += 1
+    new_edges.append(data.max())
+    # unique
+    uniq = []
+    r = 0
+    while r < len(new_edges):
+        if new_edges[r] not in uniq:
+            uniq.append(new_edges[r])
+        r += 1
+    return np.array(uniq)
 
-# def fisher_jenks_bins(data, bins):
-#     return quantile_bins(data, bins)
-
-# def ckmeans_bins(data, bins):
-#     return quantile_bins(data, bins)
 
 def headtail_bins(data):
     breaks = []
@@ -309,89 +217,190 @@ def headtail_bins(data):
         breaks.append(mean_val)
         x = x[x > mean_val]
         if len(breaks) > 20:
-            break  
-    edges = [data.min()] + sorted(breaks) + [data.max()]
-    return np.unique(edges)
+            break
+    edges = [data.min()]
+    sorted_breaks = sorted(breaks)
+    s = 0
+    while s < len(sorted_breaks):
+        edges.append(sorted_breaks[s])
+        s += 1
+    edges.append(data.max())
+    # unique
+    uniq = []
+    u = 0
+    while u < len(edges):
+        if edges[u] not in uniq:
+            uniq.append(edges[u])
+        u += 1
+    return np.array(uniq)
+
 
 def pretty_bins(data, bins):
-    minv, maxv = float(np.min(data)), float(np.max(data))
+    minv = float(np.min(data))
+    maxv = float(np.max(data))
     step = (maxv - minv) / bins
     mag = 10 ** np.floor(np.log10(step))
     nice_step = np.ceil(step / mag) * mag
     nice_min = np.floor(minv / mag) * mag
-    nice_max = np.ceil(maxv /mag) * mag
-    edges = [nice_min + i * nice_step for i in range(bins + 1)]
+    nice_max = np.ceil(maxv / mag) * mag
+    edges = []
+    i = 0
+    while i < (bins + 1):
+        edges.append(nice_min + i * nice_step)
+        i += 1
     if edges[-1] < nice_max:
         edges.append(nice_max)
-    return np.unique(edges)
+    uniq = []
+    t = 0
+    while t < len(edges):
+        if edges[t] not in uniq:
+            uniq.append(edges[t])
+        t += 1
+    return np.array(uniq)
 
-# --------- Similarity  ---------
-# def bin_similarity(manual_ranges, auto_ranges):
-#     # overlap = 0
-#     # for m in manual_ranges:
-#     #     for a in auto_ranges:
-#     #         start = max(m[0], a[0])
-#     #         end = min(m[1], a[1])
-#     #         overlap += max(0, end - start)
-#     # manual_total = np.sum([m[1] - m[0] for m in manual_ranges])
-#     # return overlap / manual_total if manual_total > 0 else 0
-    
-#     # #EUCLIDEAN
-#     # if (manual_ranges.shape == auto_ranges.shape):
-#     #     differences = manual_ranges-auto_ranges
-#     # elif (manual_ranges.size > auto_ranges.size):
-#     #     differences = manual_ranges[:auto_ranges.shape[0]] - auto_ranges
-#     # else:
-#     #     differences = manual_ranges - auto_ranges[:manual_ranges.shape[0]]
-#     # differences = differences**2
-#     # differences = np.sum(differences)
-#     # differences = differences ** 0.5
-#     # return differences
 
-#     #NORMALIZED EUCLIDEAN
-#     if (manual_ranges.shape == auto_ranges.shape):
-#         differences = 1 - auto_ranges/manual_ranges
-#     elif (manual_ranges.size > auto_ranges.size):
-#         differences = 1 - auto_ranges/manual_ranges[:auto_ranges.shape[0]]
-#     else:
-#         differences = 1 - auto_ranges[:manual_ranges.shape[0]]/manual_ranges
-#     #print("subtracted", differences)
-#     differences = differences**2
-#     #print("squared", differences)
-#     differences = np.nan_to_num(differences,nan=0, posinf=0, neginf=0)
-#     #print("na removed", differences)
-#     differences = np.sum(differences)
-#     #print("summed", differences)
-#     differences = differences ** 0.5
-#     #print("sqrt", differences)
-#     return differences
-
-def bin_similarity(manual_ranges, auto_ranges):
-    overlap = 0
-    for m in manual_ranges:
-        for a in auto_ranges:
+# 1D similarity algorithm
+def bin_similarity_1d(manual_ranges, auto_ranges):
+    overlap = 0.0
+    i = 0
+    while i < len(manual_ranges):
+        m = manual_ranges[i]
+        j = 0
+        while j < len(auto_ranges):
+            a = auto_ranges[j]
             start = max(m[0], a[0])
             end = min(m[1], a[1])
             if end - start > 0:
-                overlap += end - start
-    manual_total = 0
-    for m in manual_ranges:
-        manual_total += m[1] - m[0]
+                overlap += (end - start)
+            j += 1
+        i += 1
+
+    manual_total = 0.0
+    i = 0
+    while i < len(manual_ranges):
+        m = manual_ranges[i]
+        manual_total += (m[1] - m[0])
+        i += 1
+
     if manual_total > 0:
-        return (overlap / manual_total) * 100
+        return (overlap / manual_total) * 100.0
     else:
-        return 0  
-# --------- Input file name (csv) ---------
+        return 0.0
+
+
+# 2D similarity algorithm
+def bin_similarity_2d(manual_meta, auto_meta):
+    manual_edges = manual_meta["binBreaks"]
+    auto_edges = auto_meta["binBreaks"]
+
+    manual_ranges = []
+    i = 0
+    while i < (len(manual_edges) - 1):
+        manual_ranges.append([manual_edges[i], manual_edges[i + 1]])
+        i += 1
+
+    auto_ranges = []
+    j = 0
+    while j < (len(auto_edges) - 1):
+        auto_ranges.append([auto_edges[j], auto_edges[j + 1]])
+        j += 1
+
+    manual_sizes_map = manual_meta["binSizes"]
+    auto_sizes_map = auto_meta["binSizes"]
+
+    manual_sizes = []
+    k = 0
+    while k < len(manual_ranges):
+        if k in manual_sizes_map:
+            manual_sizes.append(manual_sizes_map[k])
+        else:
+            manual_sizes.append(0)
+        k += 1
+
+    auto_sizes = []
+    k = 0
+    while k < len(auto_ranges):
+        if k in auto_sizes_map:
+            auto_sizes.append(auto_sizes_map[k])
+        else:
+            auto_sizes.append(0)
+        k += 1
+
+    total_similarity = 0.0
+    n = len(manual_ranges)
+    k = 0
+    while k < n:
+        if k >= len(manual_sizes):
+            break
+
+        m_start = manual_ranges[k][0]
+        m_end = manual_ranges[k][1]
+        m_width = m_end - m_start
+        if m_width <= 0:
+            k += 1
+            continue
+
+        m_density = 0.0
+        if m_width > 0:
+            m_density = float(manual_sizes[k]) / float(m_width)
+
+        overlap_area = 0.0
+        manual_area = m_density * m_width
+
+        j = 0
+        while j < len(auto_ranges):
+            if j >= len(auto_sizes):
+                break
+
+            a_start = auto_ranges[j][0]
+            a_end = auto_ranges[j][1]
+            a_width = a_end - a_start
+            if a_width <= 0:
+                j += 1
+                continue
+
+            a_density = float(auto_sizes[j]) / float(a_width)
+
+            overlap_start = m_start
+            if a_start > overlap_start:
+                overlap_start = a_start
+
+            overlap_end = m_end
+            if a_end < overlap_end:
+                overlap_end = a_end
+
+            overlap_width = overlap_end - overlap_start
+            if overlap_width > 0:
+                overlap_height = m_density
+                if a_density < overlap_height:
+                    overlap_height = a_density
+                overlap_area += overlap_width * overlap_height
+
+            j += 1
+
+        bin_similarity = 0.0
+        if manual_area > 0:
+            bin_similarity = (overlap_area / manual_area) * 100.0
+        total_similarity += bin_similarity
+        k += 1
+
+    if n > 0:
+        return total_similarity / float(n)
+    else:
+        return 0.0
+
+
+# Input
 filename = input("Input the name of the csv file (without folder or .csv):\n")
 filename = "csv/" + filename + ".csv"
 dataset = pd.read_csv(filename)
-print(dataset.to_string())  
+print(dataset.to_string())
 
 value_col = input("Please enter the column number containing the data that you would like to bin by. (First column = 1)")
-while(not(value_col.isdigit())):
-    num_bins = input("Please enter an integer number of bins.")
-value_col = dataset.columns[int(value_col)-1]
-print(f"You are binning by {value_col}.")
+while not value_col.isdigit():
+    value_col = input("Please enter an integer number of bins.")
+value_col = dataset.columns[int(value_col) - 1]
+print("You are binning by " + str(value_col))
 values = dataset[value_col].values
 
 num_bins = input("How many bins/classes? ")
@@ -401,80 +410,127 @@ num_bins = int(num_bins)
 
 print("Input each bin's min and max")
 manual_bins = np.empty((num_bins, 2))
-for i in range(num_bins):
+i = 0
+while i < num_bins:
     while True:
         try:
-            start = float(input(f"Bin #{i+1} min: "))
+            start = float(input("Bin #{} min: ".format(i + 1)))
             break
         except ValueError:
             print("Please enter a numeric value.")
     manual_bins[i, 0] = start
     while True:
         try:
-            end = float(input(f"Bin #{i+1} max: "))
+            end = float(input("Bin #{} max: ".format(i + 1)))
             break
         except ValueError:
             print("Please enter a numeric value.")
     manual_bins[i, 1] = end
+    i += 1
 
 manual_edges = list(sorted(set(manual_bins.flatten())))
-try:
-    method_bins = {}
-    method_bins['Manual'] = bin_metadata(values, manual_edges)
-except Exception as e:
-    print("Error in Manual bin_metadata:", e)
-    exit()
+method_bins = {}
+method_bins["Manual"] = bin_metadata(values, manual_edges)
 
-# --------- Start Binning ---------
+# Start Binning
 print("\nRunning all binning methods...\n")
-try:
-    method_bins['Equal Interval'] = bin_metadata(values, equal_interval(values, num_bins))
-    method_bins['Exponential'] = bin_metadata(values, exponential_bins(values, num_bins))
-    method_bins['Geometric Interval'] = bin_metadata(values, geometric_interval(values, num_bins))
-    method_bins['Maximum Breaks'] = bin_metadata(values, maxbreaks_bins(values, num_bins))
-    method_bins['Quantile'] = bin_metadata(values, quantile_bins(values, num_bins))
-    method_bins['Box Plot'] = bin_metadata(values, boxplot_bins(values))
-    # method_bins['Percentile'] = bin_metadata(values, percentile_bins(values))
-    method_bins['Standard Deviation 1'] = bin_metadata(values, stdev_bins(values, num_bins, True, 1.0))
-    if num_bins % 2 == 1:
-        method_bins['Standard Deviation 2'] = bin_metadata(values, stdev_bins(values, num_bins, False, 1.0))
-    # method_bins['Fisher Jenks'] = bin_metadata(values, fisher_jenks_bins(values, num_bins))
-    # method_bins['CKMeans'] = bin_metadata(values, ckmeans_bins(values, num_bins))
-    # method_bins['Head Tail Breaks'] = bin_metadata(values, headtail_bins(values))
-    method_bins['Pretty Breaks'] = bin_metadata(values, pretty_bins(values, num_bins))
-except Exception as e:
-    print("Error in binning methods:", e)
-    exit()
+method_bins["Equal Interval"] = bin_metadata(values, equal_interval(values, num_bins))
+method_bins["Exponential"] = bin_metadata(values, exponential_bins(values, num_bins))
+method_bins["Geometric Interval"] = bin_metadata(values, geometric_interval(values, num_bins))
+method_bins["Maximum Breaks"] = bin_metadata(values, maxbreaks_bins(values, num_bins))
+method_bins["Quantile"] = bin_metadata(values, quantile_bins(values, num_bins))
+method_bins["Box Plot"] = bin_metadata(values, boxplot_bins(values))
+method_bins["Standard Deviation 1"] = bin_metadata(values, stdev_bins(values, num_bins, True, 1.0))
+if num_bins % 2 == 1:
+    method_bins["Standard Deviation 2"] = bin_metadata(values, stdev_bins(values, num_bins, False, 1.0))
+method_bins["Pretty Breaks"] = bin_metadata(values, pretty_bins(values, num_bins))
 
-# --------- Similarity  ---------
-print("\n--- Similarity to Manual Bins ---")
+# SImilarity Output
+print("\n--- 1D Similarity to Manual Bins ---")
 manual_ranges = manual_bins
 similarity = []
 for method, meta in method_bins.items():
     auto_ranges = []
-    for i in range(len(meta["binBreaks"]) - 1):
+    i = 0
+    while i < (len(meta["binBreaks"]) - 1):
         auto_ranges.append([meta["binBreaks"][i], meta["binBreaks"][i + 1]])
-    auto_ranges = np.array(auto_ranges)
-    sim = bin_similarity(manual_ranges, auto_ranges)
-    similarity.append((method, sim))
-similarity.sort(key=lambda x: -x[1])
-for method, sim in similarity:
-    print(f"{method}: {sim:.2f}%")
-# --------- Output (Graph) ---------
-for method, meta in method_bins.items():
-    print(f"\n=== {method} ===")
-    for i, j in meta.items():
-        if i in ['rawData', 'dataBinAssignments']: 
-            continue
-        print(f'{i}: {j}')
-    
-    plt.figure(figsize=(8, 4))
-    plt.hist(values, bins=30, color='lightgray', edgecolor='black')
-    for b in meta["binBreaks"]:
-        plt.axvline(b, color='red', linestyle='--')
-    plt.title(f"{method} Binning")
-    plt.xlabel(value_col)
-    plt.ylabel("Count")
-    plt.show()
+        i += 1
+    sim = bin_similarity_1d(manual_ranges, auto_ranges)
+    similarity.append([method, sim])
 
-print("\nDone.")
+def get_score(item):
+    return item[1]
+
+# Simple Sort
+m = 0
+while m < len(similarity):
+    n_idx = 0
+    while n_idx < len(similarity) - 1:
+        if get_score(similarity[n_idx]) < get_score(similarity[n_idx + 1]):
+            tmp = similarity[n_idx]
+            similarity[n_idx] = similarity[n_idx + 1]
+            similarity[n_idx + 1] = tmp
+        n_idx += 1
+    m += 1
+
+p = 0
+while p < len(similarity):
+    print(str(similarity[p][0]) + ": " + "{:.2f}%".format(similarity[p][1]))
+    p += 1
+
+print("\n--- 2D Similarity to Manual Bins ---")
+similarity_2d = []
+for method, meta in method_bins.items():
+    sim2d = bin_similarity_2d(method_bins["Manual"], meta)
+    similarity_2d.append([method, sim2d])
+
+# Sorting:)
+m = 0
+while m < len(similarity_2d):
+    n_idx = 0
+    while n_idx < len(similarity_2d) - 1:
+        if similarity_2d[n_idx][1] < similarity_2d[n_idx + 1][1]:
+            tmp = similarity_2d[n_idx]
+            similarity_2d[n_idx] = similarity_2d[n_idx + 1]
+            similarity_2d[n_idx + 1] = tmp
+        n_idx += 1
+    m += 1
+
+q = 0
+while q < len(similarity_2d):
+    print(str(similarity_2d[q][0]) + ": " + "{:.2f}%".format(similarity_2d[q][1]))
+    q += 1
+
+r = 0
+for method, meta in method_bins.items():
+    print("\n=== " + str(method) + " ===")
+    for key, val in meta.items():
+        if key in ["rawData", "dataBinAssignments"]:
+            continue
+        print(str(key) + ": " + str(val))
+    r += 1
+
+# Graph Output
+fig, axes = plt.subplots(4, 4, figsize=(10, 8))
+axes = axes.flatten()
+
+i = 0
+for method, meta in method_bins.items():
+    ax = axes[i]
+    ax.hist(values, bins=30, color="lightgray", edgecolor="black")
+    j = 0
+    while j < len(meta["binBreaks"]):
+        b = meta["binBreaks"][j]
+        ax.axvline(b, color="red", linestyle="--", linewidth=0.8)
+        j += 1
+    ax.set_title(method, fontsize=8)
+    ax.tick_params(axis="both", labelsize=6)
+    i += 1
+
+j = i
+while j < len(axes):
+    axes[j].axis("off")
+    j += 1
+
+plt.tight_layout()
+plt.show()
