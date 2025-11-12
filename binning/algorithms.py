@@ -154,35 +154,28 @@ def stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0):
     mu = np.mean(data)
     sigma = np.std(data)
     edges = []
+
     if mean_as_boundary:
+        # Variant 1: mean is a boundary 
+        mid = bins // 2
         i = 0
-        while i < (bins + 1):
-            edges.append(mu + (i - bins // 2) * sdfactor * sigma)
+        while i <= bins:
+            edge = mu + (i - mid) * sdfactor * sigma
+            edges.append(edge)
             i += 1
+
     else:
+        # Variant 2: mean is at the center → must be odd number of bins
         if bins % 2 == 0:
             raise ValueError('Variant 2 only works for odd bin count.')
         mid = bins // 2
         i = 0
-        while i < (bins + 1):
-            edges.append(mu + (i - mid - 0.5) * sdfactor * sigma)
+        while i <= bins:
+            edge = mu + (i - mid - 0.5) * sdfactor * sigma
+            edges.append(edge)
             i += 1
-    new_edges = []
-    new_edges.append(data.min())
-    p = 0
-    while p < len(edges):
-        new_edges.append(edges[p])
-        p += 1
-    new_edges.append(data.max())
 
-    uniq = []
-    r = 0
-    while r < len(new_edges):
-        if new_edges[r] not in uniq:
-            uniq.append(new_edges[r])
-        r += 1
-    return np.array(uniq)
-
+    return np.array(edges)
 
 # ============================================================
 # Recursive splitting for heavy-tailed distributions.
