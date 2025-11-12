@@ -96,8 +96,6 @@ def bin_similarity_1d_freq(manual_meta, auto_meta):
 # 2D
 def bin_similarity_2d(manual_meta, auto_meta):
     # Mean error based on (width × count) area difference
-    import numpy as np
-
     manual_edges = manual_meta["binBreaks"]
     auto_edges = auto_meta["binBreaks"]
     manual_sizes_map = manual_meta["binSizes"]

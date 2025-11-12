@@ -48,6 +48,7 @@ if num_bins % 2 == 1:
     method_bins["Standard Deviation 2"] = bin_metadata(values, algo.stdev_bins(values, num_bins, False, 1.0))
 method_bins["Head-Tail Breaks"] = bin_metadata(values, algo.headtail_bins(values))
 method_bins["Pretty Breaks"] = bin_metadata(values, algo.pretty_bins(values, num_bins))
+method_bins["Natural Breaks"] = bin_metadata(values, algo.natural_breaks(values, num_bins))
 
 manual_meta = method_bins["Manual"]
 manual_sizes = manual_meta["binSizes"]
@@ -71,9 +72,12 @@ for name in method_bins:
         end_val = meta["binBreaks"][i + 1]
         auto_ranges.append([start_val, end_val])
         i += 1
-
+        
+    #The average proportional difference between manual and automatic bin widths (ranges).
     avg_range_err = bin_similarity_1d_range(manual_bins, auto_ranges)
+    #The average proportional difference in counts per bin.
     avg_freq_err = bin_similarity_1d_freq(manual_meta, meta)
+    #Comparing the area difference between each pair of bins
     avg_2d_err = bin_similarity_2d(manual_meta, meta)
 
     # Save row for export
