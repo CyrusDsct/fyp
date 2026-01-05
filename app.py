@@ -55,7 +55,7 @@ def upload_image():
             # Create a document for MongoDB
             img_doc = {
                 "original_name": file.filename, 
-                "url": f("/uploads/maps/{filename}")
+                "url": f"/uploads/maps/{filename}"            
             }
             img_id = images_collection.insert_one(img_doc).inserted_id
             
