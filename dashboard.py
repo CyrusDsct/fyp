@@ -59,6 +59,17 @@ try:
                     else:
                         full_url = f"{API_BASE_URL}{img['url']}"
                         st.image(full_url, caption=img['original_name'], use_container_width=True)
+                        
+                        # --- Analyze button ---
+                        if st.button(f"🔍 Analyze Map", key=f"analyze_{img['_id']}"):
+                            with st.spinner('AI analyzing map...'):
+                                ana_res = requests.post(f"{API_BASE_URL}/analyzeMap/{img['_id']}")
+                                if ana_res.status_code == 200:
+                                    # Store results to show on screen
+                                    st.session_state['analysis_result'] = ana_res.json().get("analysis")
+                                    st.session_state['analysis_target'] = img['original_name']
+                                else:
+                                    st.error("Analysis failed. Please check backend.")
                     
                     # --- DELETE SECTION ---
                     # using the image_id
@@ -78,4 +89,16 @@ except Exception as e:
 # --- Analysis Section ---
 st.divider()
 st.subheader("Statistical Analysis")
-st.info("Will connect to LLM API soon.")
+
+# Outputs the results directly to our screen
+if 'analysis_result' in st.session_state:
+    st.success(f"Analysis complete for: {st.session_state['analysis_target']}")
+    # Displaying in markdown
+    st.markdown("### AI Report")
+    st.text_area("JSON Output", st.session_state['analysis_result'], height=400)
+    
+    if st.button("Clear Results"):
+        del st.session_state['analysis_result']
+        st.rerun()
+else:
+    st.info("Click 'Analyze Map' on any image above to see the results here.")
