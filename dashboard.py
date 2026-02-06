@@ -200,7 +200,7 @@ with center_col:
             type="secondary",
             disabled=True,
         )
-        st.caption("Upload map + CSV and choose a column to enable analysis.")
+        st.caption("Upload map + CSV and choose a column to enable the overall analysis.")
     else:
         start_clicked = st.button(
             "🚀 START ANALYSIS",
@@ -428,7 +428,6 @@ with bottom_right:
                 legend_bins = legend_dict.get("num_bins")
 
             manual_edges = None
-            legend_range = legend_dict.get("range")
 
             if legend_range:
                 try:
