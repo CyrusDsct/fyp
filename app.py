@@ -144,7 +144,7 @@ def serve_data(filename):
 def serve_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# --- LLM Analysis  ---
+# LLM Analysis 
 @app.route('/analyzeMap/<image_id>', methods=['POST'])
 def analyze_map(image_id):
     try:
@@ -152,11 +152,16 @@ def analyze_map(image_id):
         if not api_key:
             return jsonify({"error": "Missing OPENROUTER_API_KEY"}), 500
 
+        print("🔥 ANALYZE MAP HIT:", image_id)
+        print("API KEY PRESENT:", bool(api_key))
+
         img = images_collection.find_one({"_id": ObjectId(image_id)})
         if not img:
             return jsonify({"error": "Image not found"}), 404
 
         image_path = img['url'].lstrip('/')
+        print("image_path:", image_path, "exists?", os.path.exists(image_path))
+
         if not os.path.exists(image_path):
             return jsonify({"error": "Image file missing"}), 404
 
@@ -164,7 +169,6 @@ def analyze_map(image_id):
         with open(image_path, "rb") as f:
             image_base64 = base64.b64encode(f.read()).decode("utf-8")
 
-        # prompt for map input
         prompt = """
         TASK
 
@@ -505,8 +509,7 @@ def analyze_map(image_id):
 
         with OpenRouter(api_key=api_key) as client:
             response = client.chat.send(
-                #temp, will use gpt-5o
-                model="openai/gpt-4o",
+                model="openai/gpt-5o",
                 messages=[
                     {
                         "role": "user",
@@ -523,9 +526,17 @@ def analyze_map(image_id):
                 ]
             )
 
-        analysis_output = response.choices[0].message.content
 
-        # Store result
+        try:
+            analysis_output = response.choices[0].message.content
+        except Exception as parse_err:
+            print("ERROR parsing response:", repr(parse_err))
+            print("RAW RESPONSE:", response)
+            return jsonify({
+                "error": "Failed to parse OpenRouter response",
+                "raw_response": str(response)
+            }), 500
+
         results_collection.insert_one({
             "image_id": image_id,
             "analysis": analysis_output,
@@ -538,8 +549,8 @@ def analyze_map(image_id):
         }), 200
 
     except Exception as e:
+        print("ERROR in /analyzeMap:", repr(e))
         return jsonify({"error": str(e)}), 500
 
-
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000, use_reloader=False)
