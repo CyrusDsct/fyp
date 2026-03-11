@@ -1,0 +1,420 @@
+***Task Overview***
+
+Given a choropleth map image, extract the required information, evaluate the map’s quality, and return the response as JSON only. No additional text is allowed outside the JSON output. 
+This map’s intended audience is {{audience}}, and its intended purpose is {{purpose}}. 
+
+ 
+
+***Instructions***
+
+Carefully read the guidelines below to determine what information must be extracted from the map. 
+
+Analyze the map to extract each required data item. Track the qualities (good/bad/neutral) associated with each item. 
+
+For the provided description of the map’s data distribution, assess whether the binning (classification) method shown in the map is suitable for that distribution, and include this assessment in the JSON output. 
+
+In addition to the JSON-formatted output, append the following textual summaries inside the JSON fields:  
+
+A factual explanation of the map contents (up to 100 words). Highlight the main points by surrounding them with double asterisks (e.g., **Main point**). 
+
+A 300-word evaluation explaining whether the map is good or bad, based on extracted information and the count of good/bad items. Again, highlight the main points within this explanation with double asterisks. 
+
+If the map is judged “bad,” include a 150-word recommendations section summarizing how the map can be improved. Highlight the main points with double asterisks. 
+
+Confirm that the final JSON is syntactically correct and includes all fields in the structure shown below. Do not output anything outside this JSON. 
+
+ 
+
+***Required Data Items***
+
+MAP TITLE 
+
+description: The title of the map 
+
+example: Population Density of the World 
+
+=== 
+
+CITATIONS 
+
+description: The names or working links to the data sources used to make the map, if provided in 
+the image 
+
+examples: United Nations Yearly Report 2007–2008, data.worldbank.org 
+
+good: The source provided exists and is accessible 
+
+bad: There is no source, or the source is inaccessible 
+
+=== 
+
+LEGEND 
+
+description: A key or guide on the map that explains how colors (or patterns) correspond to data 
+values or categories, making it possible to interpret the map. 
+
+options: yes(present)/no(absent) 
+
+good: The bins should be clear and non-overlapping. The colors used should be distinguishable 
+and match all the colors used in the map. The legend should not cover the contents of the map 
+
+bad: No legend, unclear legend, colors in the legend do not correspond to the colors on the map, or 
+the legend covers map features 
+
+=== 
+
+LEGEND ORIENTATION 
+
+description: Whether the values of the legend are listed horizontally or vertically. 
+
+options: horizontal/vertical/other/not applicable 
+
+=== 
+
+RANGE 
+
+description: The range of data encompassed in the legend. For categorical or discretely divided 
+data, each division should be listed as a separate item in a list. Convert all ranges into the form of 
+[low, high] 
+
+example: [0,100]/[[0,10],[10,20],[20,30],[30,40],[40,50]]/[Healthy, Ill, Dead, Other, Not 
+Applicable] 
+
+good: The bins are continuous, non-overlapping, and span the whole range of data shown in the 
+map. 
+
+bad: There are gaps or overlaps in the bins, or missing data not accounted for in the legend. 
+
+=== 
+
+NO DATA 
+
+description: Does the legend identify regions with no data? 
+
+options: yes/no/not applicable 
+
+good: A distinct color or symbol is used to indicate areas with no data. 
+
+bad: Regions with no data use the same color as low values, or there is no explicit indicator for 
+regions with no data in the legend. 
+
+=== 
+
+EXPLICIT “OTHER” CATEGORY 
+
+description: Indicates whether the legend includes an explicit “Other” category to account for data that does not fit into the main categories. 
+
+options: yes/no/not applicable 
+
+good: “Other” category included when needed. 
+
+bad: Missing “Other” category when needed, leaving data unaccounted for or ambiguous. 
+
+=== 
+
+INCOMPLETE INFO 
+
+description: The map contains regions with colors that are not represented in the legend (except 
+background color). 
+
+options: yes/no 
+
+good: no (all the data shown is represented in the legend) 
+
+bad: yes (the legend is missing some data shown) 
+
+=== 
+
+DATA TYPE 
+
+description: The type of data represented in the legend. Definitions are as follows:  
+
+Nominal: non -numerical categories with no inherent hierarchy (e.g., types of land use)  
+
+Ordinal: non -numerical categories with a meaningful order (e.g., primary, secondary, tertiary)  
+
+Ratio: numeric data with a true zero point  
+
+Interval: numeric data with meaningful differences but no true zero options: nominal/ordinal/interval/ratio 
+
+=== 
+
+CONTIGUITY 
+
+description: Whether the data is represented as a continuous range or divided into discrete 
+categories (bins) 
+
+options: continuous/discrete 
+
+=== 
+
+NUMBER OF BINS 
+
+description: The number of divisions used to represent all data in the legend, including categories for No Data and Others if they exist. For continuous data, this property is not applicable. 
+
+options: 1/2/3/.../Not Applicable 
+
+good: 3–7 bins 
+
+bad: Too many = cluttered; Too few = oversimplified 
+
+=== 
+
+COLOUR SCHEME 
+
+description: The range of colors used to represent data in the legend, excluding background and“No Data” colors. Definitions:  
+
+Sequential Single-hue: single hue varying in lightness Sequential 
+
+Multi-hue: multiple hues in ordered progression Categorical: distinct colors of similar brightness 
+
+Diverging: two contrasting hues with midpoint Cyclic: continuous loop of hues (e.g., rainbow) 
+
+Other: any unclassified scheme Not Applicable: when no color scheme can be defined 
+
+options: Sequential Single-hue/Sequential Multi-hue/Categorical/Diverging/Cyclic/Other/Not Applicable 
+
+good: Color scheme matches the data type 
+
+bad: Color scheme is inappropriate for the data type 
+
+=== 
+COLOURS 
+description: A list of notable colors used in the legend, ordered left-to-right (horizontal) or top-to- 
+bottom (vertical). Use simple color names only. 
+
+example: <white, blue>/<white, red, brown>/<yellow, red>/<red, yellow, green, blue> 
+
+Good: hues are visually distinguishable between bins or across the gradient in the legend 
+
+Bad: hues are not visually distinguishable 
+
+=== 
+
+COLOUR SEMANTICS 
+
+description: A judgement on if there is any semantic relationship between the colours used in the map and the subject that is being described on the map, usually judged by physical colour or common symbolic convention. If yes, also mention the colours used, the subject represented, and how they are commonly related. 
+
+Options: yes/no/not applicable 
+
+Good: The colour choice of the map reflects its semantic meaning. For instance, maps about recycling or agriculture would be expected to use green to represent high values, maps about water usage would be expected to use blue, maps about fires might be expected to use red, etc. 
+
+Neutral: the subject matter of the map is not conventionally represented by colour. For instance, maps about diseases, obesity, global transport, etc, which are subjects without common semantic association with colours. 
+
+Bad: The colours used are not related to the semantic meaning of the map at all, such as using red 
+to represent water, green to represent death, etc. 
+
+=== 
+
+LEGEND PLACEMENT 
+
+description: Where on the map the legend is located. 
+
+options: top left/top center/top right/middle left/center/middle right/bottom left/bottom center/bottom right 
+
+good: Clear and unobtrusive (usually side or bottom) 
+
+bad: Obscures map features or hard to locate 
+
+=== 
+
+BORDER FOR LEGEND 
+
+description: Whether the legend has a border, and if so, its color. 
+
+options: yes/no/not applicable 
+
+=== 
+
+VARIABLES 
+
+description: The number of distinct data variables represented in the choropleth map. 
+
+options: <1/2/3/...> 
+
+good: The variable is clearly identified in the title or legend. 
+
+bad: The variable is ambiguous or missing. 
+
+=== 
+
+FREQUENCY 
+
+description: Indicates whether the frequency (or count) of data points in each category/bin is displayed alongside the categories in the legend or map. 
+
+options: yes/no 
+
+=== 
+
+SEMANTIC TYPE 
+
+description: What real-world value the data represents. 
+
+examples: population density/rainfall/GDP 
+
+good: Meaningful and easily identifiable from the map. 
+
+bad: Arbitrary or unclear semantic type. 
+
+=== 
+
+BACKGROUND COLOUR
+
+description: The color used for the map background (areas outside the data region, e.g., oceans or other continents). 
+
+good: Neutral and unobtrusive. 
+ 
+bad: Distracting or competing with thematic colors. 
+
+=== 
+
+DATA DISTRIBUTION 
+
+description: This map’s data set is distributed <insert method here>.  
+
+options: <data distribution method>/unknown 
+=== 
+
+CLASSIFICATION METHOD 
+
+description: For discrete data, this property denotes how the bin intervals were decided, with regards to the source data, subject matter and intended audience. Continuous data are listed as “Unclassed.” If not identifiable, assume “Manual Interval.” 
+
+options: Equal Interval/Pretty Breaks/Geometric/Exponential/Quantile/Percentile/Standard Deviation/Maximum Breaks/Unclassed/Manual Interval 
+
+good: Method is appropriate for data distribution. Guidelines are as follows: 
+
+Uniformly distributed data is meant to be binned in Equal Intervals. 
+
+Data meant to be presented neatly to the general population should use Pretty Breaks. 
+
+Standardly distributed data is meant to be binned with Standard Deviation Intervals 
+
+Exponentially distributed data is meant to be binned with Exponential Intervals 
+
+bad: Misleading or arbitrary method. 
+
+=== 
+
+COLOURBLIND FRIENDLINESS 
+
+description: Whether the colours and features used in the map, both the legend and background, are colourblind friendly 
+
+Options: yes/no 
+
+good: Colour-blind friendly palettes avoid unfriendly combinations that are difficult for colourblind people to distinguish, such as the following: 
+
+- Red, green and brown 
+
+- Pink, turquoise and gray 
+
+- Purple and blue 
+
+- Red accent on black 
+
+- Green, pink, red and blue 
+
+- Green with orange, red, or blue of the same lightness 
+
+- Pastel colors at the same level of lightness 
+
+Other distinguishable and friendly colour palettes, or single-hue palettes, should be used instead. Alternatively, the map should contain alternative means of encoding the information that use more than colour, and allow features to be distinguished without using only colour. 
+
+bad: The colour palettes use colour combinations that are hard to distinguish for people with colourblindness or weak vision, such as similar or low-contrast shades, or the combinations to avoid listed above, and provide no extra context beyond colour for identification. 
+
+=== 
+
+PRINT FRIENDLINESS 
+
+description: Whether the map’s image resolution and colour choice are printer friendly. 
+
+options: yes/no 
+
+good: The resolution should be high enough for A4 printing (around or above 150ppi, at 1754x1241 pixels depending on the image aspect ratio). There should be a high level of contrast between dark and light regions in the map, text and other details should be large enough to be printed and seen without zooming in. The background of the image should be white, or at least light-coloured, to increase readability and decrease ink consumption. Similarly, there should not be too many darkly coloured regions in the image to limit ink consumption. 
+
+bad: Poor resolution far beneath 150ppi, low contrast, colours too dark or too light, fine details that cannot be clearly printed. Dark background or large dark regions in image. 
+
+=== 
+
+ 
+
+***Output Format*** 
+
+Return a JSON object identical to the structure below. Every field must be populated (use "unknown" or "not applicable" where information is absent), and placeholders are enclosed in angle brackets. Within each field, include: 
+
+"item_name":{ 
+
+        "value": "<data distribution>/unknown", 
+
+        "quality": "good/neutral/bad", 
+
+        "explanation": "<description>", 
+
+ "fixes": "<possible improvements>/none" 
+
+}  
+
+"value" – Extracted data. 
+
+"quality" – "good", "bad", or "neutral" as appropriate. Items with no good/bad criteria listed in the Required Data Items section should be classed as neutral. 
+
+"explanation" – Brief justification of the rating. 
+
+"fixes" – Suggestions for improvement ("none" if not applicable, or if the item is classed as good/neutral). 
+
+After the "extract" object, include three narrative summaries: 
+
+"explanation" – Factual map explanation (max 100 words; highlight main points with **). 
+
+"map_quality" – Evaluation of whether the map is good or bad (approx. 300 words; highlight main points with **). 
+
+"recommendations" – Only include if the map is bad; summarize suggested fixes (approx. 150 words; highlight main points with **). If the map is good, set this field to "none". 
+
+No additional text outside this JSON object is allowed. 
+
+ 
+
+***JSON Template***
+
+{ 
+  "extract": { 
+    "map": { 
+      "map_title": { ... }, 
+      "citations": { ... }, 
+      "bgcolour": { ... } 
+    }, 
+    "legend": { 
+      "has_legend": { ... }, 
+      "orientation": { ... }, 
+      "continguity": { ... }, 
+      "range": { ... }, 
+      "num_bins": { ... }, 
+      "frequency": { ... }, 
+      "no_data": { ... }, 
+      "explicit_other": { ... }, 
+      "incomplete_info": { ... }, 
+      "data_type": { ... }, 
+      "semantic_type": { ... }, 
+      "color_scheme": { ... }, 
+      "colours": { ... }, 
+      "colour_semantics": { ... }, 
+      "legend_placement": { ... }, 
+      "border": { ... } 
+    }, 
+    "data": { 
+      "data_distribution": { ... }, 
+      "classification": { ... } 
+    }, 
+    "high_level": { 
+      "colourblind_friendly": { ... }, 
+      "print_friendly": { ... } 
+    } 
+  }, 
+  "explanation": "<100-word explanation with **main points**>", 
+  "map_quality": "<300-word evaluation with **main points**>", 
+  "recommendations": "<150-word fix summary with **main points** or "none">" 
+} 
+  
+
+Replace ... with the appropriate fields described earlier. 
+
+Ensure the final response is a valid JSON document in the structure shown. 
