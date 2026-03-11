@@ -291,3 +291,18 @@ def natural_breaks(data, bins):
     kclass.append(data[0])
     kclass = sorted(list(set(kclass)))
     return np.array(kclass)
+
+
+BIN_METHODS = {
+    "Equal Interval": equal_interval,
+    "Exponential": exponential_bins,
+    "Geometric Interval": geometric_interval,
+    "Max Breaks": maxbreaks_bins,
+    "Quantile": quantile_bins,
+    "Pretty": pretty_bins,
+    "Natural Breaks (Jenks-like)": natural_breaks,
+    # Methods without `bins` in signature are wrapped to accept (data, bins)
+    "Boxplot (IQR)": (lambda data, bins: boxplot_bins(data)),
+    "Head/Tail Breaks": (lambda data, bins: headtail_bins(data)),
+    "Std Dev": (lambda data, bins: stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0)),
+}

@@ -166,3 +166,46 @@ def bin_similarity_2d(manual_meta, auto_meta):
 
     avg_error = total / len(errors)
     return avg_error
+
+def interval_similarity(manual_edges, auto_edges):
+    """
+    Dashboard expects similarity in [0,1], higher is better.
+
+    Your existing functions return average %error (lower is better).
+    We convert:
+        similarity = 1 / (1 + avg_error/100)
+    so:
+        avg_error=0% -> 1.0
+        avg_error=100% -> 0.5
+        avg_error=300% -> 0.25
+    """
+    try:
+        m = np.array(manual_edges, dtype=float)
+        a = np.array(auto_edges, dtype=float)
+
+        m = m[np.isfinite(m)]
+        a = a[np.isfinite(a)]
+
+        if m.size < 2 or a.size < 2:
+            return None
+
+        m = np.unique(np.sort(m))
+        a = np.unique(np.sort(a))
+
+        if m.size < 2 or a.size < 2:
+            return None
+
+        manual_ranges = [[m[i], m[i + 1]] for i in range(len(m) - 1)]
+        auto_ranges = [[a[i], a[i + 1]] for i in range(len(a) - 1)]
+
+        avg_error = bin_similarity_1d_range(manual_ranges, auto_ranges)  # percent error
+        if avg_error is None:
+            return None
+
+        # convert percent error (lower better) to similarity (higher better)
+        sim = 1.0 / (1.0 + (float(avg_error) / 100.0))
+        return float(sim)
+
+    except Exception:
+        return None
+    

@@ -1,0 +1,9 @@
+Flask
+pymongo
+dnspython
+streamlit
+requests
+python-dotenv
+pandas
+matplotlib
+openrouter
