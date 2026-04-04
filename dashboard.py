@@ -120,12 +120,12 @@ with left_col:
         st.markdown('<div id="sec-context" class="section-anchor"></div>', unsafe_allow_html=True)
         st.markdown('<div class="section-label">CONTEXT</div>', unsafe_allow_html=True)
         st.text_input(
-            "Who is this map for?",
+            "Target User",
             key="target_user",
             placeholder="e.g. General public, Urban planners…",
         )
         st.text_input(
-            "What is the map for?",
+            "Map Purpose",
             key="map_purpose",
             placeholder="e.g. Show population density…",
         )
@@ -212,8 +212,6 @@ with right_col:
                     st.warning("Backend returned a non-success response.")
 
                 dur = st.session_state.get("analysis_duration_s")
-                if dur is not None:
-                    st.caption(f"time: {dur}s")
 
             if analysis_json is None:
                 st.caption("AI output is not valid JSON. Showing raw response.")

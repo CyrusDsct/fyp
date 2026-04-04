@@ -1,11 +1,10 @@
-# dashboard.py
 import numpy as np
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
 
 from binning.algorithms import BIN_METHODS
 from binning.similarity import interval_similarity
-from binning.plotting import draw_interval_bar
 from utils.json_utils import try_parse_json_text
 
 
@@ -28,6 +27,153 @@ def _extract_manual_edges(legend_range):
     return manual_edges
 
 
+def _counts_per_bin(data: np.ndarray, edges: np.ndarray) -> np.ndarray:
+
+    lefts = edges[:-1]
+    rights = edges[1:]
+    x = np.asarray(data, dtype=float)
+    x = x[np.isfinite(x)]
+    counts = np.zeros(len(lefts), dtype=int)
+
+    for i, (a, b) in enumerate(zip(lefts, rights)):
+        if i < len(lefts) - 1:
+            counts[i] = int(np.sum((x >= a) & (x < b)))
+        else:
+            counts[i] = int(np.sum((x >= a) & (x <= b)))
+    return counts
+
+
+def _format_ticks_from_edges(edges: np.ndarray, precision: int = 2):
+    def fmt(v: float) -> str:
+        s = f"{v:.{precision}f}"
+        return s.rstrip("0").rstrip(".")
+
+    tickvals = [float(v) for v in edges.tolist()]
+    ticktext = [fmt(v) for v in tickvals]
+    return tickvals, ticktext
+
+def draw_binning_diagram_plotly(
+    edges,
+    method_name: str,
+    similarity: float | None,
+    data: np.ndarray,
+    tick_precision: int = 2,
+    height: int = 190,
+):
+    edges = np.asarray(edges, dtype=float).reshape(-1)
+    edges = edges[np.isfinite(edges)]
+    edges = np.unique(edges)
+
+    if edges.size < 2:
+        st.warning(f"{method_name}: invalid edges (need >=2 unique finite edges).")
+        return
+
+    widths = np.diff(edges)
+    if np.any(widths <= 0):
+        st.warning(f"{method_name}: invalid edges (must be strictly increasing).")
+        return
+
+    x = np.asarray(data, dtype=float)
+    x = x[np.isfinite(x)]
+    if x.size == 0:
+        st.warning("No valid numeric data to plot.")
+        return
+
+    counts = _counts_per_bin(x, edges)
+    total = int(x.size)
+    shares = counts / max(total, 1) * 100.0
+
+    lefts = edges[:-1]
+    rights = edges[1:]
+    centers = (lefts + rights) / 2.0
+
+    if similarity is None:
+        title_text = f"{method_name} (Similarity: N/A)"
+    else:
+        title_text = f"{method_name} (Similarity: {similarity * 100:.0f}%)"
+
+    colors = [
+        "#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2",
+        "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC",
+    ]
+
+    ymax = int(max(counts.max(), 1))
+
+    fig = go.Figure()
+
+    for i, (a, b, c, w) in enumerate(zip(lefts, rights, centers, widths)):
+        is_last = (i == len(lefts) - 1)
+        range_text = (
+            f"[{a:.{tick_precision}f}, {b:.{tick_precision}f}]"
+            if is_last
+            else f"[{a:.{tick_precision}f}, {b:.{tick_precision}f})"
+        )
+
+        hover = (
+            f"<b>{method_name}</b><br>"
+            f"Range: {range_text}<br>"
+            f"Count: {counts[i]}<br>"
+            f"Share: {shares[i]:.1f}%<br>"
+            f"Total: {total}"
+            "<extra></extra>"
+        )
+
+        fig.add_trace(
+            go.Bar(
+                x=[float(c)],
+                y=[ymax],
+                width=[float(w)],
+                marker=dict(color="rgba(0,0,0,0)", line=dict(width=0)),
+                opacity=0.0,
+                hovertemplate=hover,
+                showlegend=False,
+            )
+        )
+
+    for i, (c, w) in enumerate(zip(centers, widths)):
+        fig.add_trace(
+            go.Bar(
+                x=[float(c)],
+                y=[int(counts[i])],
+                width=[float(w)],
+                marker=dict(color=colors[i % len(colors)], line=dict(width=0)),
+                hoverinfo="skip",
+                showlegend=False,
+            )
+        )
+
+    tickvals, ticktext = _format_ticks_from_edges(edges, precision=tick_precision)
+
+    fig.update_layout(
+        title=dict(text=title_text, x=0.0, xanchor="left"),
+        height=height,
+        margin=dict(l=25, r=20, t=58, b=50),
+        barmode="overlay",
+
+        hovermode="closest",
+
+        hoverlabel=dict(namelength=0),
+        xaxis=dict(
+            title="",
+            tickmode="array",
+            tickvals=tickvals,
+            ticktext=ticktext,
+            range=[float(edges.min()), float(edges.max())],
+            automargin=True,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Count",
+            rangemode="tozero",
+            range=[0, ymax],
+            automargin=True,
+            gridcolor="rgba(0,0,0,0.08)",
+            zeroline=False,
+        ),
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    
 def render_classification_diagram(analysis_json: dict):
     st.subheader("Diagram")
 
@@ -56,7 +202,6 @@ def render_classification_diagram(analysis_json: dict):
     legend_range = None
     legend_bins = None
 
-    # ---------- helpers ----------
     def _get_path(d, path, default=None):
         cur = d
         for p in path.split("."):
@@ -75,9 +220,7 @@ def render_classification_diagram(analysis_json: dict):
                 return v.get("value") if isinstance(v, dict) else v
         return None
 
-    # ---------- read legend from analysis_json ----------
     if isinstance(analysis_json, dict):
-        # 1) preferred: info.legend.*
         info_legend = (analysis_json.get("info", {}) or {}).get("legend", {}) or {}
         legend_range = info_legend.get("range")
         legend_bins = info_legend.get("num_bins")
@@ -96,7 +239,6 @@ def render_classification_diagram(analysis_json: dict):
                 ["RANGE", "range", "legend_range", "bins_range", "LEGEND_RANGE"],
             )
 
-        # 3) NEW: nested extract.legend.*
         if legend_bins is None:
             v = _get_path(extract, "legend.num_bins.value")
             if v is not None:
@@ -114,6 +256,7 @@ def render_classification_diagram(analysis_json: dict):
             else:
                 try:
                     import ast
+
                     legend_range = ast.literal_eval(legend_range)
                 except Exception:
                     pass
@@ -184,15 +327,14 @@ def render_classification_diagram(analysis_json: dict):
         key=lambda rec: (rec["similarity"] is None, -(rec["similarity"] or -1e18)),
     )
 
-    USE_FREQUENCY_HEIGHT = True
     for rec in method_records_sorted:
-        subtitle = f"similarity = {rec['similarity']:.3f}" if rec["similarity"] is not None else "similarity = N/A"
-        draw_interval_bar(
+        draw_binning_diagram_plotly(
             rec["edges"],
-            rec["name"],
-            subtitle=subtitle,
+            method_name=rec["name"],
+            similarity=rec["similarity"],
             data=data,
-            use_frequency_height=USE_FREQUENCY_HEIGHT,
+            tick_precision=2,
+            height=160,
         )
 
     st.session_state["binning_similarity"] = similarity_dict or None
