@@ -383,10 +383,9 @@ Return a JSON object identical to the structure below. Every field must be popul
 
 "value" – Extracted data. 
 "quality" – "good", "bad", "neutral" or "meta" as appropriate. Items in the “metadata” subsection of the Required Data Items section must be classed as "meta". Items with no good/bad criteria listed in the Required Data Items section should be classed as neutral by default. 
-"explanation" – Brief justification of the rating. 
 "fixes" – Suggestions for improvement ("none" if not applicable, or if the item is classed as good/neutral). 
 After the "extract" object, include three narrative summaries: 
-"explanation" – Factual map explanation (max 100 words; highlight main points with **). 
+"explanation" – Brief justification of the rating and factual map explanation (max 100 words; highlight main points with **). 
 "map_quality" – Evaluation of whether the map is good or bad (approx. 300 words; highlight main points with **). 
 "recommendations" – Only include if the map is bad; summarize suggested fixes (approx. 150 words; highlight main points with **). If the map is good, set this field to "none". 
 No additional text outside this JSON object is allowed. 
