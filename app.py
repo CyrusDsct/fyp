@@ -198,27 +198,6 @@ def intervals_to_edges(intervals: list[list[float]]) -> Optional[list[float]]:
 
 def normalize_analysis(analysis_json: dict) -> dict:
     # Ensure extract.RANGE has normalized intervals + edges when possible.
-    try:
-        analysis_json["facts"]["inferred_interpretation"]["map"]["classification_method"] = {
-            "value": "Equal Interval",
-            "quality": "good",
-            "explanation": (
-                "The legend uses five adjacent class ranges with nearly equal widths "
-                "(6-10.99%, 11-15.99%, 16-20.99%, 21-25.99%, and 26-30.99%). "
-                "Since the breaks follow a consistent interval size rather than "
-                "irregular user-defined thresholds, the classification method is "
-                "interpreted as Equal Interval."
-            ),
-            "fixes": "none",
-        }
-        analysis_json["facts"]["normative_evaluation"]["map"]["classification_appropriateness"] = {
-            "value": "good",
-            "quality": "good",
-            "explanation": "The class breaks are equal-width intervals, making Equal Interval appropriate for this demo.",
-            "fixes": "none",
-        }
-    except Exception:
-        pass
     
     extract = analysis_json.get("extract")
     if not isinstance(extract, dict):
