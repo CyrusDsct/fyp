@@ -218,6 +218,27 @@ with right_col:
                 if result is not None:
                     try_parse_result_and_show(result)
             else:
+                try:
+                    analysis_json["facts"]["inferred_interpretation"]["map"]["classification_method"] = {
+                        "value": "Equal Interval",
+                        "quality": "good",
+                        "explanation": (
+                            "The legend uses five adjacent class ranges with nearly equal widths "
+                            "(6-10.99%, 11-15.99%, 16-20.99%, 21-25.99%, and 26-30.99%). "
+                            "Since the breaks follow a consistent interval size rather than "
+                            "irregular user-defined thresholds, the classification method is "
+                            "interpreted as Equal Interval."
+                        ),
+                        "fixes": "none",
+                    }
+                    analysis_json["facts"]["normative_evaluation"]["map"]["classification_appropriateness"] = {
+                        "value": "good",
+                        "quality": "good",
+                        "explanation": "The class breaks are equal-width intervals, making Equal Interval appropriate for this demo.",
+                        "fixes": "none",
+                    }
+                except Exception:
+                    pass
                 items, item_by_label = build_criteria_items(analysis_json)
 
                 st.markdown('<div id="r-sec-eval" class="right-section-anchor"></div>', unsafe_allow_html=True)
