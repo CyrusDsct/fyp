@@ -1,484 +1,461 @@
 ***Task Overview***
-Given a choropleth map image, extract the required information, evaluate the map’s quality, and return the response as JSON only. No additional text is allowed outside the JSON output. 
-This map’s intended audience is {{audience}}, and its intended purpose is {{purpose}}. 
-
+Given a choropleth map image, extract the required information, evaluate the map’s quality and return the response as JSON only. No additional text is allowed outside the JSON output.
+This map’s intended audience is {{audience}}, and its intended purpose is {{purpose}}.
 ***Instructions***
-Carefully read the guidelines below to determine what information must be extracted from the map. 
-Analyze the map to extract each required data item. Track the qualities (good/bad/neutral) associated with each item. 
-For the provided description of the map’s data distribution, assess whether the binning (classification) method shown in the map is suitable for that distribution, and include this assessment in the JSON output. 
+Carefully read the guidelines below to determine what information must be extracted from the map.
+Analyze the map to extract each required data item. Track the qualities (good/bad/neutral/meta) associated with each item. All items in the “metadata” subsection of the Required Data Items section must be classed as "meta". Items with no good/bad criteria listed in the Required Data Items section should be classed as neutral by default.
+For the provided description of the map’s data distribution, assess whether the binning (classification) method shown in the map is suitable for that distribution, and include this assessment in the JSON output.
 In addition to the JSON-formatted output, append the following textual summaries inside the JSON fields:  
-A factual explanation of the map contents (up to 100 words). Highlight the main points by surrounding them with double asterisks (e.g., **Main point**). 
-A 300-word evaluation explaining whether the map is good or bad, based on extracted information and the count of good/bad items. Again, highlight the main points within this explanation with double asterisks. 
-If the map is judged “bad,” include a 150-word recommendations section summarizing how the map can be improved. Highlight the main points with double asterisks. 
-Confirm that the final JSON is syntactically correct and includes all fields in the structure shown below. Do not output anything outside this JSON. 
-
+A factual explanation of the map contents (up to 100 words). Highlight the main points by surrounding them with double asterisks (e.g., **Main point**).
+A 300-word evaluation explaining whether the map is good or bad, based on extracted information and the count of good/bad items. Highlight the main points within this explanation with double asterisks.
+If the map is judged “bad,” include a 150-word recommendations section summarizing how the map can be improved. Highlight the main points with double asterisks.
+Confirm that the final JSON is syntactically correct and includes all fields in the structure shown below. Do not output anything outside this JSON.
 ***Required Data Items***
-{ 
-  "choropleth_map_evaluation": { 
-    "facts": { 
-      "map": { 
-        "number_of_bins": { 
-          "description": "The number of divisions used to represent all data in the legend, including categories for 'No Data' and 'Others' if they exist. For continuous data+legend combinations, this property is not applicable.", 
-          "options": "1/2/3/.../Not available", 
-        }, 
-        "data_breaks": { 
-          "description": "Extracted boundary values (e.g.: '1-10', 'Good'/'Neutral'/'Bad') from legend labels. For categorical or discretely divided data, each division should be listed as a separate item in a list. Convert all ranges into the form of [low, high].", 
-          "example": "Example for continuous legend: [0,100]. Example for discrete legend: [[0,10],[10,20],[20,30],[30,40],[40,50]] or ['Good','Neutral','Bad'].", 
-          "options": "list of ranges" 
-        }, 
-        "data_contiguity": { 
-          "description": "Whether the data is represented as a continuous range or divided into discrete categories (bins).", 
-          "options": "continuous/discrete/not applicable" 
-        }, 
-        "number_of_variables": { 
-          "description": "The number of variables represented in the map, inferred from the legend in terms of the number of scales present (single vs dual scales) as well as their dimensionality (e.g.: bar legend vs matrix legend).", 
-          "options": "univariate (1)/bivariate (2)/multivariate (3+)" 
-        }, 
-        "region_count": { 
-          "description": "The number of distinctly divided and colored regions in the map.", 
-          "options": "0/1/2/..." 
-        }, 
-        "coverage_percentage": { 
-          "description": "The percentage of regions shown in the map with known data and colors within the legend", 
-          "options": "0-100%" 
-        } 
-      }, 
-      "color": { 
-        "color_scheme": { 
-          "description": "The type of color sequence used to represent data in the legend, excluding 'No Data' and background colors.", 
-          "definitions": { 
-            "Sequential Single-hue": "Single hue varying in lightness, used for ordered data.", 
-            "Sequential Multi-hue": "Multiple hues in an ordered progression, used for ordered data.", 
-            "Categorical": "Distinct colors of similar brightness, used for unordered categories.", 
-            "Diverging": "Two contrasting hues with a neutral midpoint, used when the data diverges around a meaningful center.", 
-            "Cyclic": "Continuous loop of hues, used for data that wraps around (e.g., angles or phases).", 
-            "Other": "Any unclassified scheme.", 
-            "Not Applicable": "When no color scheme can be defined." 
-          }, 
-          "options": "Sequential Single-hue/Sequential Multi-hue/Categorical/Diverging/Cyclic/Other/Not Applicable" 
-        }, 
-        "legend_colors": { 
-          "description": "A list of notable colors used in the legend, ordered left-to-right (horizontal) or top-to-bottom (vertical). Use simple color names only.", 
-          "example": "[white, blue]/[white, red, brown]/[yellow, red]/[red, yellow, green, blue]", 
-          "options": "list of colors" 
-        } 
-      }, 
-      "legend": { 
-        "legend_presence": { 
-          "description": "whether the map has a legend", 
-          "options": "yes/no" 
-        }, 
-        "legend_orientation": { 
-          "description": "whether the values of the legend are listed horizontally or vertically", 
-          "options": "horizontal/vertical/other/not applicable" 
-        }, 
-        "legend_placement": { 
-          "description": "where in the map the legend is placed", 
-          "options": "top left/top center/top right/center left/center/center right/bottom left/bottom center/bottom right" 
-        }, 
-        "frequency_labels": { 
-          "description": "Whether the frequency of data points in each category/bin is displayed alongside the categories in the legend or map.", 
-          "options": "yes/no/not applicable" 
-        } 
-      }, 
-      "title": { 
-        "title_presence": { 
-          "description": "whether the map has a title", 
-          "options": "yes/no" 
-        }, 
-        "title_text": { 
-          "description": "the text in the title, if it exists", 
-          "options": "'title text'/not applicable" 
-        }, 
-        "subtitle_presence": { 
-          "description": "whether the map has a subtitle", 
-          "options": "yes/no" 
-        }, 
-        "subtitle_text": { 
-          "description": "the text in the subtitle, if it exists", 
-          "options": "'subtitle text'/not applicable" 
-        } 
-      }, 
-      "layout_and_styling": { 
-        "map_projection": { 
-          "description": "The type of map projection used to display the regions of the map. This can be inferred from the shape distortions of various regions, especially near the poles.", 
-          "options": "Albers/Robinson/Mercator/.../unknown" 
-        }, 
-        "background_color": { 
-          "description": "The color used for the map background (areas outside the data region, e.g., oceans or other continents).", 
-          "options": "color name" 
-        } 
-      }, 
-      "source": { 
-        "source_citation": { 
-          "description": "The names or working links to the data sources used to make the map, if provided in the image.", 
-          "examples": "United Nations Yearly Report 2007–2008, data.worldbank.org", 
-          "options": "text/link/not applicable" 
-        } 
-      } 
-    }, 
-    "inferred_interpretation": { 
-      "map": { 
-        "data_distribution": { 
-          "description": "The data distribution of the map's dataset.", 
-          "options": "equal/standard/exponential/normal/uniform/skewed/heavy-tailed/clustered/gappy/domain-specific/unknown/not applicable", 
-          "definitions": { 
-            "normal": "Bell curve, symmetric around mean", 
-            "uniform": "Even spread across range", 
-            "skewed": "Tailed toward extremes (right/left)", 
-            "heavy-tailed": "Few extreme values, many small (power-law)", 
-            "clustered": "Multiple peaks/groups in distribution (multimodal)", 
-            "gappy": "Natural gaps between values", 
-            "domain-specific": "Requires contextual knowledge", 
-            "unknown": "Cannot determine from map" 
-          } 
-        }, 
-        "classification_method": { 
-          "description": "The binning method used to split the range of data into discrete bins. For maps with continuous binning, this attribute is always 'Unclassed'. If no existing binning method can be detected, assume that 'Manual Interval' is used.", 
-          "options": "Equal Interval/Pretty Breaks/Geometric Interval/Exponential/Logarithmic/Quantile/Percentile/Standard Deviation/Natural Breaks/Head/Tail Breaks/Maximum Breaks/Manual Interval/Unclassed", 
-          "methods": { 
-            "Equal Interval": { 
-              "description": "Divides the data range into equal bin intervals. Best for uniform/normal distributions.", 
-              "good_for": ["uniform", "normal"], 
-              "bad_for": ["skewed", "heavy-tailed"] 
-            }, 
-            "Pretty Breaks": { 
-              "description": "Rounds bin breaks to pretty values for readability.", 
-              "good_for": ["any"] 
-            }, 
-            "Geometric Interval": { 
-              "description": "Uses geometric series for skewed data.", 
-              "good_for": ["skewed", "heavy-tailed"], 
-              "bad_for": ["uniform"] 
-            }, 
-            "Exponential": { 
-              "description": "Exponential bin sizing for heavy-tailed data.", 
-              "good_for": ["heavy-tailed", "skewed"], 
-              "bad_for": ["uniform", "normal"] 
-            }, 
-            "Logarithmic": { 
-              "description": "Log base-10 transformation for extreme ranges.", 
-              "good_for": ["heavy-tailed"], 
-              "bad_for": ["uniform"] 
-            }, 
-            "Quantile": { 
-              "description": "Equal observations per bin.", 
-              "good_for": ["uniform", "heavy-tailed"], 
-              "bad_for": ["clustered"] 
-            }, 
-            "Percentile": { 
-              "description": "Percentile-based breaks highlighting tails.", 
-              "good_for": ["skewed"], 
-              "bad_for": ["uniform"] 
-            }, 
-            "Standard Deviation": { 
-              "description": "Bins by standard deviations from mean.", 
-              "good_for": ["normal"], 
-              "bad_for": ["skewed", "heavy-tailed"] 
-            }, 
-            "Natural Breaks": { 
-              "description": "Minimizes within-bin variance.", 
-              "good_for": ["clustered"], 
-              "bad_for": ["uniform"] 
-            }, 
-            "Head/Tail Breaks": { 
-              "description": "Recursive splits for heavy-tailed data.", 
-              "good_for": ["heavy-tailed"], 
-              "bad_for": ["normal", "uniform"] 
-            }, 
-            "Maximum Breaks": { 
-              "description": "Places breaks at maximum data gaps.", 
-              "good_for": ["clustered", "gappy", "skewed"] 
-            }, 
-            "Manual Interval": { 
-              "description": "Predetermined domain-specific breaks.", 
-              "good_for": ["domain-specific"] 
-            }, 
-            "Unclassed": { 
-              "description": "Continuous color ramp, no discrete bins.", 
-              "good_for": ["any"] 
-            } 
-          } 
-        }, 
-        "normalization_present": { 
-          "description": "Whether the mapped variable appears to be normalized (per capita, rate, percent, index) rather than raw totals.", 
-          "options": "yes/no/unclear", 
-          "evidence_sources": ["title", "legend labels", "subtitle", "visual patterns"] 
-        }, 
-        "normalization_type": { 
-          "description": "Specific type of normalization if present.", 
-          "options": "per capita/percent/rate/index/area-adjusted/absolute/unknown/not applicable" 
-        }, 
-        "geographic_unit_homogeneous": { 
-          "description": "Whether all regions use the same administrative/geographic unit (e.g., all countries, all states).", 
-          "options": "yes/no/mixed/not applicable" 
-        }, 
-        "administrative_level": { 
-          "description": "Primary geographic unit of analysis.", 
-          "options": "country/state/province/county/district/neighborhood/custom/unknown" 
-        } 
-      }, 
-      "legend": { 
-        "legend_completeness": { 
-          "description": "All the non-background colors used in the map are represented in the legend.", 
-          "options": "yes/no/not applicable" 
-        }, 
-        "handling_no_missing_data": { 
-          "description": "There exists a distinct color or pattern for regions that do not have data.", 
-          "options": "yes/no/not applicable" 
-        } 
-      }, 
-      "source": { 
-        "source_recency": { 
-          "description": "Whether source appears recent relative to map publication (within ~1 year).", 
-          "options": "recent/outdated/unknown/not applicable" 
-        } 
-      } 
-    }, 
-    "normative_evaluation": { 
-      "map": { 
-        "bin_count_appropriateness": { 
-          "description": "Whether the number of bins is appropriate (3-7 optimal for most cases).", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "3-7 bins", 
-            "bad": "Too many bins (clutters), too few bins (oversimplifies)" 
-          } 
-        }, 
-        "data_breaks_quality": { 
-          "description": "Whether bins are continuous, non-overlapping, and span the whole data range.", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "Bins are continuous, non-overlapping, complete range", 
-            "bad": "Gaps, overlaps, or incomplete coverage" 
-          } 
-        }, 
-        "classification_appropriateness": { 
-          "description": "Whether classification method matches detected data distribution.", 
-          "options": "good/bad/unknown", 
-          "rationale": "See classification_methods.good_for/bad_for mappings above" 
-        }, 
-        "choropleth_suitability": { 
-          "description": "Whether variable is appropriate for choropleth (normalized, not raw area-biased totals).", 
-          "options": "good/bad/unclear", 
-          "rationale": { 
-            "good": "Normalized variable (rates, per capita, indexes)", 
-            "bad": "Raw totals on area map (population, GDP by country)", 
-            "neutral": "Cannot determine from available evidence" 
-          } 
-        }, 
-        "region_hierarchy_consistency": { 
-          "description": "Whether geographic division hierarchy is consistent across map.", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "All regions same scale (all countries OR all states)", 
-            "bad": "Mixed scales (countries + states on same map)" 
-          } 
-        }, 
-        "data_coverage_adequacy": { 
-          "description": "Whether sufficient data coverage for meaningful analysis, where coverage refers to all regions represented in the legend", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "100%", 
-            "neutral": ">=70% - >100%" 
-            "bad": "<70%" 
-          } 
-        } 
-      }, 
-      "color": { 
-        "color_scheme_appropriateness": { 
-          "description": "Whether color scheme matches data type and ordering.", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "Sequential→ordered data, Diverging→bipolar data, Categorical→unordered", 
-            "bad": "Mismatch (rainbow→ordered, single-hue→categorical)" 
-          } 
-        }, 
-        "color_distinguishability": { 
-          "description": "Whether legend hues are visually distinguishable between bins.", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "Clear visual separation between adjacent colors", 
-            "bad": "Similar hues create confusion" 
-          } 
-        } 
-      }, 
-      "legend": { 
-        "legend_placement_quality": { 
-          "description": "Whether legend placement avoids obstructing map regions.", 
-          "options": "good/bad", 
-          "rationale": { 
-            "good": "Does not cover regions of interest", 
-            "bad": "Obscures important map areas" 
-          } 
-        } 
-      }, 
-      "title": { 
-        "title_quality": { 
-          "description": "Whether title clearly indicates subject and variables.", 
-          "options": "good/bad/not applicable", 
-          "rationale": { 
-            "good": "Clear subject indication, concise", 
-            "bad": "Unclear, excessively long, or absent" 
-          } 
-        }, 
-        "subtitle_quality": { 
-          "description": "Whether subtitle meaningfully supplements title.", 
-          "options": "good/bad/not applicable", 
-          "rationale": { 
-            "good": "Helpful clarification", 
-            "bad": "Redundant or unhelpful" 
-          } 
-        } 
-      }, 
-      "high_level": { 
-        "information_readability": { 
-          "description": "Information is readable by general public.", 
-          "options": "yes/no", 
-          "rationale": { 
-            "good": "Clear subject/variables, clean legend values, no obscure terms", 
-            "bad": "Too complex or lacks essential information" 
-          } 
-        }, 
-        "information_specificity": { 
-          "description": "Contains detailed info for expert analysis.", 
-          "options": "yes/no", 
-          "rationale": { 
-            "good": "Sufficient detail for research/policy use", 
-            "bad": "Only general information" 
-          } 
-        }, 
-        "visual_readability": { 
-          "description": "Design enables easy visual distinction of elements.", 
-          "options": "yes/no", 
-          "rationale": { 
-            "good": "Good contrast, legible fonts, distinguishable regions", 
-            "bad": "Poor visual clarity due to design choices" 
-          } 
-        } 
-      }, 
-      "source": { 
-        "source_quality": { 
-          "description": "Whether source is reputable, relevant, and recent.", 
-          "options": "good/bad/not applicable", 
-          "rationale": { 
-            "good": "Reliable, relevant, reasonably current source", 
-            "bad": "Unreliable, irrelevant, or outdated" 
-          } 
-        } 
-      } 
-    } 
-  } 
-} 
-
+{
+  "choropleth_map_evaluation": {
+    "facts": {
+      "map": {
+        "number_of_bins": {
+          "description": "The number of divisions used to represent all data in the legend, including categories for 'No Data' and 'Others' if they exist. For continuous data+legend combinations, this property is not applicable.",
+          "options": "1/2/3/.../Not available",
+        },
+        "data_breaks": {
+          "description": "Extracted boundary values (e.g.: '1-10', 'Good'/'Neutral'/'Bad') from legend labels. For categorical or discretely divided data, each division should be listed as a separate item in a list. Convert all ranges into the form of [low, high].",
+          "example": "Example for continuous legend: [0,100]. Example for discrete legend: [[0,10],[10,20],[20,30],[30,40],[40,50]] or ['Good','Neutral','Bad'].",
+          "options": "list of ranges"
+        },
+        "data_contiguity": {
+          "description": "Whether the data is represented as a continuous range or divided into discrete categories (bins).",
+          "options": "continuous/discrete/not applicable"
+        },
+        "number_of_variables": {
+          "description": "The number of variables represented in the map, inferred from the legend in terms of the number of scales present (single vs dual scales) as well as their dimensionality (e.g.: bar legend vs matrix legend).",
+          "options": "univariate (1)/bivariate (2)/multivariate (3+)"
+        },
+        "region_count": {
+          "description": "The number of distinctly divided and colored regions in the map.",
+          "options": "0/1/2/..."
+        },
+        "coverage_percentage": {
+          "description": "The percentage of regions shown in the map with known data and colors within the legend",
+          "options": "0-100%"
+        }
+      },
+      "color": {
+        "color_scheme": {
+          "description": "The type of color sequence used to represent data in the legend, excluding 'No Data' and background colors.",
+          "definitions": {
+            "Sequential Single-hue": "Single hue varying in lightness, used for ordered data.",
+            "Sequential Multi-hue": "Multiple hues in an ordered progression, used for ordered data.",
+            "Categorical": "Distinct colors of similar brightness, used for unordered categories.",
+            "Diverging": "Two contrasting hues with a neutral midpoint, used when the data diverges around a meaningful center.",
+            "Cyclic": "Continuous loop of hues, used for data that wraps around (e.g., angles or phases).",
+            "Other": "Any unclassified scheme.",
+            "Not Applicable": "When no color scheme can be defined."
+          },
+          "options": "Sequential Single-hue/Sequential Multi-hue/Categorical/Diverging/Cyclic/Other/Not Applicable"
+        },
+        "legend_colors": {
+          "description": "A list of notable colors used in the legend, ordered left-to-right (horizontal) or top-to-bottom (vertical). Use simple color names only.",
+          "example": "[white, blue]/[white, red, brown]/[yellow, red]/[red, yellow, green, blue]",
+          "options": "list of colors"
+        }
+      },
+      "legend": {
+        "legend_presence": {
+          "options": "yes/no"
+        },
+        "legend_orientation": {
+          "options": "horizontal/vertical/other/not applicable"
+        },
+        "legend_placement": {
+          "description": "where in the map the legend is placed",
+          "options": "top left/top center/top right/center left/center/center right/bottom left/bottom center/bottom right"
+        },
+        "frequency_labels": {
+          "description": "Whether the frequency of data points in each category/bin is displayed alongside the categories in the legend or map.",
+          "options": "yes/no/not applicable"
+        }
+      },
+      "title": {
+        "title_presence": {
+          "options": "yes/no"
+        },
+        "title_text": {
+          "options": "'title text'/not applicable"
+        },
+        "subtitle_presence": {
+          "options": "yes/no"
+        },
+        "subtitle_text": {
+          "options": "'subtitle text'/not applicable"
+        }
+      },
+      "layout_and_styling": {
+        "map_projection": {
+          "description": "The type of map projection used to display the regions of the map. This can be inferred from the shape distortions of various regions, especially near the poles.",
+          "options": "Albers/Robinson/Mercator/.../unknown"
+        },
+        "background_color": {
+          "description": "The color used for the map background (areas outside the data region, e.g., oceans or other continents).",
+          "options": "color name"
+        }
+      },
+      "source": {
+        "source_citation": {
+          "description": "The names or working links to the data sources used to make the map, if provided in the image.",
+          "examples": "United Nations Yearly Report 2007–2008, data.worldbank.org",
+          "options": "text/link/not applicable"
+        }
+      }
+    },
+    "inferred_interpretation": {
+      "map": {
+        "data_distribution": {
+          "description": "The data distribution of the map's dataset.",
+          "options": "equal/standard/exponential/normal/uniform/skewed/heavy-tailed/clustered/gappy/domain-specific/unknown/not applicable",
+          "definitions": {
+            "normal": "Bell curve, symmetric around mean",
+            "uniform": "Even spread across range",
+            "skewed": "Tailed toward extremes (right/left)",
+            "heavy-tailed": "Few extreme values, many small (power-law)",
+            "clustered": "Multiple peaks/groups in distribution (multimodal)",
+            "gappy": "Natural gaps between values",
+            "domain-specific": "Requires contextual knowledge",
+            "unknown": "Cannot determine from map"
+          }
+        },
+        "classification_method": {
+          "description": "The binning method used to split the range of data into discrete bins. For maps with continuous binning, this attribute is always 'Unclassed'. If no existing binning method can be detected, assume that 'Manual Interval' is used.",
+          "options": "Equal Interval/Pretty Breaks/Geometric Interval/Exponential/Logarithmic/Quantile/Percentile/Standard Deviation/Natural Breaks/Head/Tail Breaks/Maximum Breaks/Manual Interval/Unclassed",
+          "methods": {
+            "Equal Interval": {
+              "description": "Divides the data range into equal bin intervals. Best for uniform/normal distributions.",
+              "good_for": ["uniform", "normal"],
+              "bad_for": ["skewed", "heavy-tailed"]
+            },
+            "Pretty Breaks": {
+              "description": "Rounds bin breaks to pretty values for readability.",
+              "good_for": ["any"]
+            },
+            "Geometric Interval": {
+              "description": "Uses geometric series for skewed data.",
+              "good_for": ["skewed", "heavy-tailed"],
+              "bad_for": ["uniform"]
+            },
+            "Exponential": {
+              "description": "Exponential bin sizing for heavy-tailed data.",
+              "good_for": ["heavy-tailed", "skewed"],
+              "bad_for": ["uniform", "normal"]
+            },
+            "Logarithmic": {
+              "description": "Log base-10 transformation for extreme ranges.",
+              "good_for": ["heavy-tailed"],
+              "bad_for": ["uniform"]
+            },
+            "Quantile": {
+              "description": "Equal observations per bin.",
+              "good_for": ["uniform", "heavy-tailed"],
+              "bad_for": ["clustered"]
+            },
+            "Percentile": {
+              "description": "Percentile-based breaks highlighting tails.",
+              "good_for": ["skewed"],
+              "bad_for": ["uniform"]
+            },
+            "Standard Deviation": {
+              "description": "Bins by standard deviations from mean.",
+              "good_for": ["normal"],
+              "bad_for": ["skewed", "heavy-tailed"]
+            },
+            "Natural Breaks": {
+              "description": "Minimizes within-bin variance.",
+              "good_for": ["clustered"],
+              "bad_for": ["uniform"]
+            },
+            "Head/Tail Breaks": {
+              "description": "Recursive splits for heavy-tailed data.",
+              "good_for": ["heavy-tailed"],
+              "bad_for": ["normal", "uniform"]
+            },
+            "Maximum Breaks": {
+              "description": "Places breaks at maximum data gaps.",
+              "good_for": ["clustered", "gappy", "skewed"]
+            },
+            "Manual Interval": {
+              "description": "Predetermined domain-specific breaks.",
+              "good_for": ["domain-specific"]
+            },
+            "Unclassed": {
+              "description": "Continuous color ramp, no discrete bins.",
+              "good_for": ["any"]
+            }
+          }
+        },
+        "normalization_present": {
+          "description": "Whether the mapped variable appears to be normalized (per capita, rate, percent, index) rather than raw totals.",
+          "options": "yes/no/unclear",
+          "evidence_sources": ["title", "legend labels", "subtitle", "visual patterns"]
+        },
+        "normalization_type": {
+          "description": "Specific type of normalization if present.",
+          "options": "per capita/percent/rate/index/area-adjusted/absolute/unknown/not applicable"
+        },
+        "geographic_unit_homogeneous": {
+          "description": "Whether all regions use the same administrative/geographic unit (e.g., all countries, all states).",
+          "options": "yes/no/mixed/not applicable"
+        },
+        "administrative_level": {
+          "description": "Primary geographic unit of analysis.",
+          "options": "country/state/province/county/district/neighborhood/custom/unknown"
+        }
+      },
+      "legend": {
+        "legend_completeness": {
+          "description": "All the non-background colors used in the map are represented in the legend.",
+          "options": "yes/no/not applicable"
+        },
+        "handling_no_missing_data": {
+          "description": "There exists a distinct color or pattern for regions that do not have data.",
+          "options": "yes/no/not applicable"
+        }
+      },
+      "source": {
+        "source_recency": {
+          "description": "Whether source appears recent relative to map publication (within ~1 year).",
+          "options": "recent/outdated/unknown/not applicable"
+        }
+      }
+    },
+    "normative_evaluation": {
+      "map": {
+        "bin_count_appropriateness": {
+          "description": "Whether the number of bins is appropriate (3-7 optimal for most cases).",
+          "options": "good/bad",
+          "rationale": {
+            "good": "3-7 bins",
+            "bad": "Too many bins (clutters), too few bins (oversimplifies)"
+          }
+        },
+        "data_breaks_quality": {
+          "description": "Whether bins are continuous, non-overlapping, and span the whole data range.",
+          "options": "good/bad",
+          "rationale": {
+            "good": "Bins are continuous, non-overlapping, complete range",
+            "bad": "Gaps, overlaps, or incomplete coverage"
+          }
+        },
+        "classification_appropriateness": {
+          "description": "Whether classification method matches detected data distribution.",
+          "options": "good/bad/unknown",
+          "rationale": "See classification_methods.good_for/bad_for mappings above"
+        },
+        "choropleth_suitability": {
+          "description": "Whether variable is appropriate for choropleth (normalized, not raw area-biased totals).",
+          "options": "good/bad/unclear",
+          "rationale": {
+            "good": "Normalized variable (rates, per capita, indexes)",
+            "bad": "Raw totals on area map (population, GDP by country)",
+            "neutral": "Cannot determine from available evidence"
+          }
+        },
+        "region_hierarchy_consistency": {
+          "description": "Whether geographic division hierarchy is consistent across map.",
+          "options": "good/bad",
+          "rationale": {
+            "good": "All regions same scale (all countries OR all states)",
+            "bad": "Mixed scales (countries + states on same map)"
+          }
+        },
+        "data_coverage_adequacy": {
+          "description": "Whether sufficient data coverage for meaningful analysis, where coverage refers to all regions represented in the legend",
+          "options": "good/bad",
+          "rationale": {
+            "good": "100%",
+            "neutral": ">=70% - >100%"
+            "bad": "<70%"
+          }
+        }
+      },
+      "color": {
+        "color_scheme_appropriateness": {
+          "description": "Whether color scheme matches data type and ordering.",
+          "options": "good/bad",
+          "rationale": {
+            "good": "Sequential→ordered data, Diverging→bipolar data, Categorical→unordered",
+            "bad": "Mismatch (rainbow→ordered, single-hue→categorical)"
+          }
+        },
+        "color_distinguishability": {
+          "description": "Whether legend hues are visually distinguishable between bins.",
+          "options": "good/bad",
+          "rationale": {
+            "good": "Clear visual separation between adjacent colors",
+            "bad": "Similar hues create confusion"
+          }
+        }
+      },
+      "legend": {
+        "legend_placement_quality": {
+          "description": "Whether legend placement avoids obstructing map regions.",
+          "options": "good/bad",
+          "rationale": {
+            "good": "Does not cover regions of interest",
+            "bad": "Obscures important map areas"
+          }
+        }
+      },
+      "title": {
+        "title_quality": {
+          "description": "Whether title clearly indicates subject and variables.",
+          "options": "good/bad/not applicable",
+          "rationale": {
+            "good": "Clear subject indication, concise",
+            "bad": "Unclear, excessively long, or absent"
+          }
+        },
+        "subtitle_quality": {
+          "description": "Whether subtitle meaningfully supplements title.",
+          "options": "good/bad/not applicable",
+          "rationale": {
+            "good": "Helpful clarification",
+            "bad": "Redundant or unhelpful"
+          }
+        }
+      },
+      "high_level": {
+        "information_readability": {
+          "description": "Information is readable by general public.",
+          "options": "yes/no",
+          "rationale": {
+            "good": "Clear subject/variables, clean legend values, no obscure terms",
+            "bad": "Too complex or lacks essential information"
+          }
+        },
+        "information_specificity": {
+          "description": "Contains detailed info for expert analysis.",
+          "options": "yes/no",
+          "rationale": {
+            "good": "Sufficient detail for research/policy use",
+            "bad": "Only general information"
+          }
+        },
+        "visual_readability": {
+          "description": "Design enables easy visual distinction of elements.",
+          "options": "yes/no",
+          "rationale": {
+            "good": "Good contrast, legible fonts, distinguishable regions",
+            "bad": "Poor visual clarity due to design choices"
+          }
+        }
+      },
+      "source": {
+        "source_quality": {
+          "description": "Whether source is reputable, relevant, and recent.",
+          "options": "good/bad/not applicable",
+          "rationale": {
+            "good": "Reliable, relevant, reasonably current source",
+            "bad": "Unreliable, irrelevant, or outdated"
+          }
+        }
+      }
+    }
+  }
+}
 ***Output Format ***
-Return a JSON object identical to the structure below. Every field must be populated (use "unknown" or "not applicable" where information is absent), and placeholders are enclosed in angle brackets. Within each field, include: 
-
-"item_name":{ 
-        "value": "<data distribution>/unknown", 
-        "quality": "good/neutral/bad", 
-        "explanation": "<description>", 
-        "fixes": "<possible improvements>/none" 
+Return a JSON object identical to the structure below. Every field must be populated (use "unknown" or "not applicable" where information is absent), and placeholders are enclosed in angle brackets. Within each field, include:
+"item_name":{
+        "value": "<data value>/unknown",
+        "quality": "good/neutral/bad/meta",
+        "explanation": "<description>",
+        "fixes": "<possible improvements>/none"
 }  
-
-"value" – Extracted data. 
-"quality" – "good", "bad", "neutral" or "meta" as appropriate. Items in the “metadata” subsection of the Required Data Items section must be classed as "meta". Items with no good/bad criteria listed in the Required Data Items section should be classed as neutral by default. 
-"fixes" – Suggestions for improvement ("none" if not applicable, or if the item is classed as good/neutral). 
-After the "extract" object, include three narrative summaries: 
-"explanation" – Brief justification of the rating and factual map explanation (max 100 words; highlight main points with **). 
-"map_quality" – Evaluation of whether the map is good or bad (approx. 300 words; highlight main points with **). 
-"recommendations" – Only include if the map is bad; summarize suggested fixes (approx. 150 words; highlight main points with **). If the map is good, set this field to "none". 
-No additional text outside this JSON object is allowed. 
-
-***JSON Template*** 
+Replace ~ with the appropriate fields described earlier.
+No additional text outside this JSON object is allowed.
+***JSON Template***
 {  
   "facts": {  
-    "metadata":{ 
+    "metadata":{
       "map": {  
-        "number_of_bins": { ... },  
-        "data_breaks": { ... },  
-        "data_contiguity": { ... },  
-        "number_of_variables": { ... },  
-        "region_count": { ... },  
-        "coverage_percentage": { ... }  
+        "number_of_bins": ~,  
+        "data_breaks": ~,  
+        "data_contiguity": ~,  
+        "number_of_variables": ~,  
+        "region_count": ~,  
+        "coverage_percentage": ~  
       },  
       "color": {  
-        "color_scheme": { ... },  
-        "legend_colors": { ... }  
+        "color_scheme": ~,
+        "legend_colors":  ~  
       },  
       "legend": {  
-        "legend_presence": { ... },  
-        "legend_orientation": { ... },  
-        "legend_placement": { ... },  
-        "frequency_labels": { ... }  
+        "legend_presence": ~  
+        "legend_orientation": ~,
+        "legend_placement": ~,  
+        "frequency_labels": ~
       },  
       "title": {  
-        "title_presence": { ... },  
-        "title_text": { ... },  
-        "subtitle_presence": { ... },  
-        "subtitle_text": { ... }  
+        "title_presence": ~,  
+        "title_text": ~,  
+        "subtitle_presence": ~,  
+        "subtitle_text": ~  
       },  
       "background": {  
-        "map_projection": { ... },  
-        "background_color": { ... }  
+        "map_projection": ~,  
+        "background_color": ~  
       },  
       "source": {  
-        "source_citation": { ... }  
-      } 
-    }, 
- 
+        "source_citation": ~  
+      }
+    },
     "inferred_interpretation":{  
       "map": {  
-        "data_distribution": { ... },  
-        "classification_method": { ... },  
-        "normalization_present": { ... },  
-        "geographic_unit_homogenous": { ... },  
-        "administrative_level": { ... }  
+        "data_distribution": ~,  
+        "classification_method": ~,  
+        "normalization_present": ~,  
+        "geographic_unit_homogenous": ~,  
+        "administrative_level": ~  
       },  
       "legend": {  
-        "legend_completeness": { ... },  
-        "handling_no_missing_data": { ... }  
+        "legend_completeness": ~,  
+        "handling_no_missing_data": ~  
       },  
       "source": {  
         "source_recency": {}  
       }  
     },  
-
     "normative_evaluation": {  
       "map": {  
-        "bin_count_appropriateness": { ... },  
-        "data_breaks_quality": { ... },  
-        "classification_appropriateness": { ... },  
-        "choropleth_suitability": { ... },  
-        "region_hierarchy_consistency": { ... },  
-        "data_coverage_adequacy": { ... }  
+        "bin_count_appropriateness": ~,  
+        "data_breaks_quality": ~,  
+        "classification_appropriateness": ~,  
+        "choropleth_suitability": ~,  
+        "region_hierarchy_consistency": ~,  
+        "data_coverage_adequacy": ~  
       },  
       "color": {  
-        "color_scheme_appropriateness": { ... },  
-        "color_distinguishability": { ... }  
+        "color_scheme_appropriateness": ~,  
+        "color_distinguishability": ~  
       },  
       "legend": {  
-        "legend_placement_quality": { ... }  
+        "legend_placement_quality": ~  
       },  
       "title": {  
-        "title_quality": { ... },  
-        "subtitle_quality": { ... }  
+        "title_quality": ~,  
+        "subtitle_quality": ~  
       },  
       "high_level": {  
-        "information_readability": { ... },  
-        "information_specificity": { ... },  
-        "visual_readability": { ... }  
+        "information_readability": ~,  
+        "information_specificity": ~,  
+        "visual_readability": ~  
       },  
       "source": {  
-        "source_quality": { ... }  
+        "source_quality": ~  
       }  
     }  
-  }, 
-   
+  },
   "explanation": "<100-word explanation with **main points**>",  
   "map_quality": "<300-word evaluation with **main points**>",  
-  "recommendations": "<150-word fix summary with **main points** or "none">"  
-} 
-Replace ... with the appropriate fields described earlier. 
- 
-Ensure the final response is a valid JSON document in the structure shown. 
+  "recommendations": "<150-word fix summary with **main points** or "none", if the map is bad>"  
+}
+Ensure the final response is a valid JSON document in the structure shown.
