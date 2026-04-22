@@ -323,32 +323,6 @@ Confirm that the final JSON is syntactically correct and includes all fields in 
           }
         }
       },
-      "high_level": {
-        "information_readability": {
-          "description": "Information is readable by general public.",
-          "options": "yes/no",
-          "rationale": {
-            "good": "Clear subject/variables, clean legend values, no obscure terms",
-            "bad": "Too complex or lacks essential information"
-          }
-        },
-        "information_specificity": {
-          "description": "Contains detailed info for expert analysis.",
-          "options": "yes/no",
-          "rationale": {
-            "good": "Sufficient detail for research/policy use",
-            "bad": "Only general information"
-          }
-        },
-        "visual_readability": {
-          "description": "Design enables easy visual distinction of elements.",
-          "options": "yes/no",
-          "rationale": {
-            "good": "Good contrast, legible fonts, distinguishable regions",
-            "bad": "Poor visual clarity due to design choices"
-          }
-        }
-      },
       "source": {
         "source_quality": {
           "description": "Whether source is reputable, relevant, and recent.",
@@ -421,7 +395,7 @@ No additional text outside this JSON object is allowed.
         "handling_no_missing_data": ~  
       },  
       "source": {  
-        "source_recency": {}  
+        "source_recency": ~  
       }  
     },  
     "normative_evaluation": {  
@@ -444,18 +418,13 @@ No additional text outside this JSON object is allowed.
         "title_quality": ~,  
         "subtitle_quality": ~  
       },  
-      "high_level": {  
-        "information_readability": ~,  
-        "information_specificity": ~,  
-        "visual_readability": ~  
-      },  
       "source": {  
         "source_quality": ~  
       }  
     }  
   },
-  "explanation": "<100-word explanation with **main points**>",  
-  "map_quality": "<300-word evaluation with **main points**>",  
+  "explanation": "<100-word explanation of the map contents with **main points**>",  
+  "map_quality": "<300-word evaluation of the map quality, readability, specificity and appropriacy (with regard to the intended audience and purpose) ,with **main points**>",  
   "recommendations": "<150-word fix summary with **main points** or "none", if the map is bad>"  
 }
 Ensure the final response is a valid JSON document in the structure shown.
