@@ -1,14 +1,7 @@
-# dashboard.py
-import io
-import time
-import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
-from ui.sections.diagram import render_classification_diagram
-from ui.sections.evaluation import render_evaluation
 
-from backend_client import BackendClient
-from ui.sections.criteria import build_criteria_items, render_criteria
+from ui.sections.evaluation import render_evaluation
+from ui.sections.criteria import build_criteria_items, render_details
 from ui.components.styles import inject_global_padding, inject_base_css
 from ui.components.scripts import (
     inject_panel_height_js,
@@ -21,15 +14,13 @@ from ui.sections.upload_data import render_data_section
 from ui.sections.start_analysis_sync import start_analysis_sync
 
 BACKEND_BASE = "http://127.0.0.1:5000"
-backend = BackendClient(BACKEND_BASE)
 
 st.set_page_config(page_title="Map Analysis", layout="wide")
 
 
 def init_state():
     defaults = {
-        # overall
-        "analysis_status": "idle",  # idle | running | done | error
+        "analysis_status": "idle",
         "analysis_result": None,
         "analysis_error": None,
         "analysis_started_at": None,
@@ -48,9 +39,37 @@ def init_state():
         "is_numeric_column": None,
         "binning_similarity": None,
     }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+
+def try_parse_result_and_show(result: dict):
+    if isinstance(result, dict) and "analysis" in result:
+        analysis_value = result.get("analysis", "")
+        if isinstance(analysis_value, dict):
+            st.json(analysis_value)
+            return
+
+        parsed = try_parse_json_text(analysis_value)
+        if parsed is not None:
+            st.json(parsed)
+        else:
+            st.text_area("Raw analysis (not valid JSON)", str(analysis_value), height=350)
+            st.caption("Note: `analysis` is not valid JSON.")
+    else:
+        st.json(result)
+
+
+def unwrap_analysis_json(data):
+    if not isinstance(data, dict):
+        return data
+
+    wrapped = data.get("choropleth_map_evaluation")
+    if isinstance(wrapped, dict):
+        return wrapped
+
+    return data
 
 
 init_state()
@@ -59,23 +78,6 @@ inject_global_padding(padding_top_rem=0.08, padding_bottom_rem=0.0)
 inject_base_css()
 inject_panel_height_js()
 
-
-def try_parse_result_and_show(result: dict):
-    if isinstance(result, dict) and "analysis" in result:
-        analysis_text = result.get("analysis", "")
-        parsed = try_parse_json_text(analysis_text)
-        if parsed is not None:
-            st.json(parsed)
-        else:
-            st.text_area("Raw analysis (not valid JSON)", str(analysis_text), height=350)
-            st.caption("Note: 'analysis' is not valid JSON (or contains code fences).")
-    else:
-        st.json(result)
-
-
-# =============================
-# HEADER
-# =============================
 st.markdown(
     """
     <div class="top-title-wrap">
@@ -85,9 +87,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# =============================
-# MAIN PANELS
-# =============================
 left_col, right_col = st.columns([4, 6], gap="medium")
 
 with left_col:
@@ -122,31 +121,28 @@ with left_col:
         st.text_input(
             "Target User",
             key="target_user",
-            placeholder="e.g. General public, Urban planners…",
+            placeholder="e.g. General public, urban planners",
         )
         st.text_input(
             "Map Purpose",
             key="map_purpose",
-            placeholder="e.g. Show population density…",
+            placeholder="e.g. Show population density",
         )
 
         st.markdown("</div>", unsafe_allow_html=True)
-
         inject_left_scroll_to_js()
-
         st.markdown("</div>", unsafe_allow_html=True)
 
     has_map = bool(st.session_state.get("map_bytes"))
     running = st.session_state.get("analysis_status") == "running"
-
-    btn_label = "Running…" if running else "Analyze"
+    btn_label = "Running..." if running else "Analyze"
     clicked = st.button(btn_label, disabled=(not has_map) or running, use_container_width=True, type="primary")
 
     if clicked:
         try:
             start_analysis_sync()
-        except Exception as e:
-            st.session_state["analysis_error"] = str(e)
+        except Exception as exc:
+            st.session_state["analysis_error"] = str(exc)
             st.session_state["analysis_status"] = "error"
         st.rerun()
 
@@ -160,23 +156,22 @@ with right_col:
     analysis_json = None
     if status == "done" and isinstance(result, dict) and "analysis" in result:
         analysis_raw = result.get("analysis")
-
         if isinstance(analysis_raw, dict):
-            analysis_json = analysis_raw
+            analysis_json = unwrap_analysis_json(analysis_raw)
         else:
             parsed = try_parse_json_text(analysis_raw or "")
             if isinstance(parsed, dict):
-                analysis_json = parsed
+                analysis_json = unwrap_analysis_json(parsed)
+
     show_right_header = analysis_json is not None
 
     if show_right_header:
         st.markdown(
             """
-            <div class="right-fixed-headers" id="rightFixedHdr">
+            <div class="right-fixed-headers two-tabs" id="rightFixedHdr">
               <div class="hdr-row">
-                <button type="button" data-target="r-sec-eval">AI Evaluation</button>
-                <button type="button" data-target="r-sec-criteria">Criteria</button>
-                <button type="button" data-target="r-sec-classify">Diagram</button>
+                <button type="button" data-target="r-sec-overview">Overview</button>
+                <button type="button" data-target="r-sec-details">Details</button>
               </div>
             </div>
             """,
@@ -189,18 +184,15 @@ with right_col:
         if status == "idle":
             st.markdown(
                 '<div class="right-placeholder">'
-                'Upload a map and click <b> Analyze </b> to see results.'
+                'Upload a map and click <b>Analyze</b> to see results.'
                 "</div>",
                 unsafe_allow_html=True,
             )
-
         elif status == "running":
-            st.info("Running… ")
-
+            st.info("Running analysis...")
         elif status == "error":
             st.error(f"Analysis failed: {err or 'unknown error'}")
             st.caption(f"Make sure Flask backend is running at {BACKEND_BASE}")
-
         elif status == "done":
             if result is None:
                 st.warning("Analysis finished, but no results were produced.")
@@ -211,24 +203,19 @@ with right_col:
                 else:
                     st.warning("Backend returned a non-success response.")
 
-                dur = st.session_state.get("analysis_duration_s")
-
             if analysis_json is None:
                 st.caption("AI output is not valid JSON. Showing raw response.")
                 if result is not None:
                     try_parse_result_and_show(result)
             else:
-                items, item_by_label = build_criteria_items(analysis_json)
+                items, item_by_id = build_criteria_items(analysis_json)
 
-                st.markdown('<div id="r-sec-eval" class="right-section-anchor"></div>', unsafe_allow_html=True)
-                render_evaluation(analysis_json, item_by_label)
+                st.markdown('<div id="r-sec-overview" class="right-section-anchor"></div>', unsafe_allow_html=True)
+                render_evaluation(analysis_json, item_by_id)
 
-                st.markdown('<div id="r-sec-criteria" class="right-section-anchor"></div>', unsafe_allow_html=True)
-                render_criteria(analysis_json, items=items)
-
-                st.markdown('<div id="r-sec-classify" class="right-section-anchor"></div>', unsafe_allow_html=True)
-                render_classification_diagram(analysis_json)
-
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown('<div id="r-sec-details" class="right-section-anchor"></div>', unsafe_allow_html=True)
+                render_details(analysis_json, items=items)
         else:
             st.warning(f"Unknown analysis_status: {status}")
 

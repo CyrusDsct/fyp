@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-import streamlit as st
 import plotly.graph_objects as go
+import streamlit as st
 
 from binning.algorithms import BIN_METHODS
 from binning.similarity import interval_similarity
@@ -28,7 +28,6 @@ def _extract_manual_edges(legend_range):
 
 
 def _counts_per_bin(data: np.ndarray, edges: np.ndarray) -> np.ndarray:
-
     lefts = edges[:-1]
     rights = edges[1:]
     x = np.asarray(data, dtype=float)
@@ -52,6 +51,7 @@ def _format_ticks_from_edges(edges: np.ndarray, precision: int = 2):
     ticktext = [fmt(v) for v in tickvals]
     return tickvals, ticktext
 
+
 def draw_binning_diagram_plotly(
     edges,
     method_name: str,
@@ -59,6 +59,7 @@ def draw_binning_diagram_plotly(
     data: np.ndarray,
     tick_precision: int = 2,
     height: int = 190,
+    title_text: str | None = None,
 ):
     edges = np.asarray(edges, dtype=float).reshape(-1)
     edges = edges[np.isfinite(edges)]
@@ -87,14 +88,22 @@ def draw_binning_diagram_plotly(
     rights = edges[1:]
     centers = (lefts + rights) / 2.0
 
-    if similarity is None:
-        title_text = f"{method_name} (Similarity: N/A)"
-    else:
-        title_text = f"{method_name} (Similarity: {similarity * 100:.0f}%)"
+    if title_text is None:
+        if similarity is None:
+            title_text = f"{method_name}"
+        else:
+            title_text = f"{method_name} ({similarity * 100:.0f}% similarity)"
 
     colors = [
-        "#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2",
-        "#B279A2", "#FF9DA6", "#9D755D", "#BAB0AC",
+        "#4C78A8",
+        "#F58518",
+        "#54A24B",
+        "#E45756",
+        "#72B7B2",
+        "#B279A2",
+        "#FF9DA6",
+        "#9D755D",
+        "#BAB0AC",
     ]
 
     ymax = int(max(counts.max(), 1))
@@ -102,7 +111,7 @@ def draw_binning_diagram_plotly(
     fig = go.Figure()
 
     for i, (a, b, c, w) in enumerate(zip(lefts, rights, centers, widths)):
-        is_last = (i == len(lefts) - 1)
+        is_last = i == len(lefts) - 1
         range_text = (
             f"[{a:.{tick_precision}f}, {b:.{tick_precision}f}]"
             if is_last
@@ -147,11 +156,9 @@ def draw_binning_diagram_plotly(
     fig.update_layout(
         title=dict(text=title_text, x=0.0, xanchor="left"),
         height=height,
-        margin=dict(l=25, r=20, t=58, b=50),
+        margin=dict(l=25, r=20, t=54, b=44),
         barmode="overlay",
-
         hovermode="closest",
-
         hoverlabel=dict(namelength=0),
         xaxis=dict(
             title="",
@@ -173,81 +180,87 @@ def draw_binning_diagram_plotly(
     )
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    
-def render_classification_diagram(analysis_json: dict):
-    st.subheader("Diagram")
 
+
+def _get_path(data, path, default=None):
+    current = data
+    for part in path.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return default
+        current = current[part]
+    return current
+
+
+def _extract_value_shallow(extract_dict, key_names):
+    if not isinstance(extract_dict, dict):
+        return None
+    for key_name in key_names:
+        if key_name in extract_dict:
+            value = extract_dict[key_name]
+            return value.get("value") if isinstance(value, dict) else value
+    return None
+
+
+def _extract_classification_method(analysis_json: dict) -> str:
+    paths = [
+        "inferred_interpretation.map.classification_method.value",
+        "facts.inferred_interpretation.map.classification_method.value",
+        "info.classification",
+    ]
+    for path in paths:
+        value = _get_path(analysis_json, path)
+        if value:
+            return str(value)
+    return "Unknown"
+
+
+def _extract_binning_inputs(analysis_json: dict):
     csv_df = st.session_state.get("csv_df")
     selected_column = st.session_state.get("selected_column")
     is_numeric_col = st.session_state.get("is_numeric_column", None)
 
     if (csv_df is None) or (selected_column is None):
-        st.info("Upload CSV and choose a data column to see diagrams.")
-        return
+        return None, None, None, "Upload CSV and choose a data column to see binning results."
 
     if not is_numeric_col:
-        st.info(
-            "The selected data column appears to be **categorical**.\n\n"
-            "Map-design quality can still be evaluated above in the *AI Evaluation* and *Criteria* sections."
-        )
-        return
+        return None, None, None, "The selected data column is categorical, so binning comparison is unavailable."
 
     col_series = csv_df[selected_column]
     data = pd.to_numeric(col_series, errors="coerce").dropna().to_numpy()
-
     if data.size == 0:
-        st.warning("No valid numeric data in this column (all values are NaN/non-numeric).")
-        return
+        return None, None, None, "No valid numeric data is available in the selected column."
 
     legend_range = None
     legend_bins = None
 
-    def _get_path(d, path, default=None):
-        cur = d
-        for p in path.split("."):
-            if not isinstance(cur, dict) or p not in cur:
-                return default
-            cur = cur[p]
-        return cur
-
-    def _extract_value_shallow(extract_dict, key_names):
-        """Look for extract[k] at the first level, return dict.value if dict."""
-        if not isinstance(extract_dict, dict):
-            return None
-        for k in key_names:
-            if k in extract_dict:
-                v = extract_dict[k]
-                return v.get("value") if isinstance(v, dict) else v
-        return None
-
     if isinstance(analysis_json, dict):
-        info_legend = (analysis_json.get("info", {}) or {}).get("legend", {}) or {}
-        legend_range = info_legend.get("range")
-        legend_bins = info_legend.get("num_bins")
+        metadata_map = _get_path(analysis_json, "facts.metadata.map", {}) or {}
+
+        legend_bins = _extract_value_shallow(
+            metadata_map,
+            ["number_of_bins", "num_bins", "NUMBER OF BINS", "NUMBER_OF_BINS", "bins"],
+        )
+        legend_range = _extract_value_shallow(
+            metadata_map,
+            ["data_breaks", "range", "RANGE", "legend_range", "LEGEND_RANGE"],
+        )
 
         extract = analysis_json.get("extract") or {}
-
         if legend_bins is None:
             legend_bins = _extract_value_shallow(
                 extract,
                 ["NUMBER OF BINS", "num_bins", "bins", "number_of_bins", "NUMBER_OF_BINS"],
             )
-
         if legend_range is None:
             legend_range = _extract_value_shallow(
                 extract,
-                ["RANGE", "range", "legend_range", "bins_range", "LEGEND_RANGE"],
+                ["RANGE", "range", "legend_range", "bins_range", "LEGEND_RANGE", "data_breaks"],
             )
 
         if legend_bins is None:
-            v = _get_path(extract, "legend.num_bins.value")
-            if v is not None:
-                legend_bins = v
-
+            legend_bins = _get_path(extract, "legend.num_bins.value")
         if legend_range is None:
-            v = _get_path(extract, "legend.range.value")
-            if v is not None:
-                legend_range = v
+            legend_range = _get_path(extract, "legend.range.value")
 
         if isinstance(legend_range, str):
             parsed = try_parse_json_text(legend_range)
@@ -262,44 +275,30 @@ def render_classification_diagram(analysis_json: dict):
                     pass
 
     manual_edges = _extract_manual_edges(legend_range)
-
     if legend_bins is None:
-        st.warning(
-            "Cannot render binning diagram because legend bin count is missing.\n\n"
-            "Expected one of:\n"
-            "- `info.legend.num_bins`\n"
-            "- `extract.legend.num_bins.value`\n"
-            "- `extract['NUMBER OF BINS'].value` (legacy)\n"
-        )
-        return
-
+        return None, None, None, "Legend bin count is missing from the analysis output."
     try:
         bins = int(float(legend_bins))
         if bins < 2:
             raise ValueError("num_bins must be >= 2")
     except Exception:
-        st.warning(f"Cannot render binning diagram because bin count is invalid: {legend_bins!r}")
-        return
-
-    st.markdown(f"**Number of bins** (from map legend): `{bins}`")
+        return None, None, None, f"Legend bin count is invalid: {legend_bins!r}"
 
     if manual_edges is None:
-        st.warning(
-            "Cannot compute similarity because legend range is missing/invalid.\n\n"
-            "Expected one of:\n"
-            "- `info.legend.range`\n"
-            "- `extract.legend.range.value`\n"
-            "- `extract['RANGE'].value` (legacy)\n\n"
-            "Supported formats:\n"
-            "- edges like `[6, 11, 16, ...]`\n"
-            "- intervals like `[[6, 10.99], [11, 15.99], ...]`"
-        )
-        return
+        return None, None, None, "Legend data breaks are missing or invalid, so similarity cannot be computed."
+
+    return data, bins, manual_edges, None
+
+
+def build_binning_diagnostics(analysis_json: dict):
+    data, bins, manual_edges, error = _extract_binning_inputs(analysis_json)
+    if error:
+        return {"error": error}
 
     method_records = []
     similarity_dict = {}
 
-    for m_name, func in BIN_METHODS.items():
+    for method_name, func in BIN_METHODS.items():
         try:
             edges = func(data, bins)
             if edges is None:
@@ -309,35 +308,131 @@ def render_classification_diagram(analysis_json: dict):
                 continue
 
             score = interval_similarity(manual_edges, edges)
-            score_f = float(score) if score is not None else None
-
-            method_records.append({"name": m_name, "edges": edges, "similarity": score_f})
-            if score_f is not None:
-                similarity_dict[m_name] = score_f
-
-        except Exception as e:
-            st.warning(f"{m_name}: error computing bins ({e})")
-
-    if not method_records:
-        st.warning("No binning methods produced edges.")
-        return
+            score_value = float(score) if score is not None else None
+            method_records.append(
+                {
+                    "name": method_name,
+                    "edges": edges,
+                    "similarity": score_value,
+                }
+            )
+            if score_value is not None:
+                similarity_dict[method_name] = score_value
+        except Exception as exc:
+            method_records.append(
+                {
+                    "name": method_name,
+                    "edges": None,
+                    "similarity": None,
+                    "error": str(exc),
+                }
+            )
 
     method_records_sorted = sorted(
         method_records,
-        key=lambda rec: (rec["similarity"] is None, -(rec["similarity"] or -1e18)),
+        key=lambda record: (record.get("similarity") is None, -(record.get("similarity") or -1e18), record["name"]),
     )
-
-    for rec in method_records_sorted:
-        draw_binning_diagram_plotly(
-            rec["edges"],
-            method_name=rec["name"],
-            similarity=rec["similarity"],
-            data=data,
-            tick_precision=2,
-            height=160,
-        )
 
     st.session_state["binning_similarity"] = similarity_dict or None
     if isinstance(analysis_json, dict):
         analysis_json.setdefault("binning_similarity", {})
         analysis_json["binning_similarity"].update(similarity_dict)
+
+    return {
+        "data": data,
+        "bins": bins,
+        "manual_edges": np.asarray(manual_edges, dtype=float),
+        "classification_method": _extract_classification_method(analysis_json),
+        "method_records_sorted": method_records_sorted,
+        "similarity_dict": similarity_dict,
+    }
+
+
+def _format_edge_list(edges) -> str:
+    return ", ".join(f"{float(edge):.2f}".rstrip("0").rstrip(".") for edge in edges)
+
+
+def render_similarity_explainer(manual_edges, auto_edges, similarity: float | None):
+    st.markdown(
+        "Similarity is based on how close each generated bin width is to the uploaded map's bin width."
+    )
+    if similarity is None:
+        st.write("This method did not produce a valid similarity score.")
+        return
+
+    st.code("similarity = 1 / (1 + average_width_error / 100)", language="text")
+    st.write(f"Uploaded map edges: {_format_edge_list(manual_edges)}")
+    st.write(f"Method edges: {_format_edge_list(auto_edges)}")
+    st.write(f"Similarity score: {similarity * 100:.1f}%")
+
+
+def render_binning_method_rankings(diagnostics: dict, container_height: int = 340, chart_height: int = 150):
+    method_records_sorted = diagnostics.get("method_records_sorted") or []
+    if not method_records_sorted:
+        st.info("No binning methods were available for comparison.")
+        return
+
+    with st.container(height=container_height, border=False):
+        for record in method_records_sorted:
+            st.markdown(f"**{record['name']}**")
+            if record.get("error"):
+                st.caption(f"Could not compute this method: {record['error']}")
+                st.markdown("<hr>", unsafe_allow_html=True)
+                continue
+
+            similarity = record.get("similarity")
+            if similarity is None:
+                st.caption("Similarity unavailable")
+            else:
+                st.caption(f"Similarity score: {similarity * 100:.1f}%")
+
+            draw_binning_diagram_plotly(
+                record["edges"],
+                method_name=record["name"],
+                similarity=similarity,
+                data=diagnostics["data"],
+                tick_precision=2,
+                height=chart_height,
+            )
+
+            with st.expander("Show similarity"):
+                render_similarity_explainer(
+                    diagnostics["manual_edges"],
+                    record["edges"],
+                    similarity,
+                )
+
+            st.markdown("<hr>", unsafe_allow_html=True)
+
+
+def render_binning_overview(analysis_json: dict):
+    diagnostics = build_binning_diagnostics(analysis_json)
+    if diagnostics.get("error"):
+        st.info(diagnostics["error"])
+        return
+
+    st.subheader("Overview")
+    st.markdown("#### The uploaded map is binned as:")
+    st.write(diagnostics["classification_method"])
+    draw_binning_diagram_plotly(
+        diagnostics["manual_edges"],
+        method_name="Uploaded map",
+        similarity=None,
+        data=diagnostics["data"],
+        tick_precision=2,
+        height=220,
+        title_text="Uploaded map binning",
+    )
+
+    st.markdown("#### This binning method is similar to")
+    render_binning_method_rankings(diagnostics, container_height=360, chart_height=145)
+
+
+def render_classification_diagram(analysis_json: dict):
+    diagnostics = build_binning_diagnostics(analysis_json)
+    if diagnostics.get("error"):
+        st.info(diagnostics["error"])
+        return
+
+    st.subheader("Binning related")
+    render_binning_method_rankings(diagnostics, container_height=420, chart_height=155)

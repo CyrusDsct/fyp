@@ -239,6 +239,10 @@ hr{
   gap:8px;
 }
 
+.right-fixed-headers.two-tabs .hdr-row{
+  grid-template-columns: 1fr 1fr;
+}
+
 .right-fixed-headers button{
   width:100%;
   display:flex;

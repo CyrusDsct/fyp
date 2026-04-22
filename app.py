@@ -1,20 +1,22 @@
 import os
-from dotenv import load_dotenv
 import base64
-import uuid
-import time
-import logging
-from datetime import datetime
+import io
 import json
+import logging
 import re
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_from_directory
-from pymongo import MongoClient
 from bson.objectid import ObjectId
-from werkzeug.utils import secure_filename
 from openrouter import OpenRouter
-from pathlib import Path
+from PIL import Image, UnidentifiedImageError
+from pymongo import MongoClient
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -29,6 +31,14 @@ app.config["DATA_FOLDER"] = DATA_FOLDER
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
+
+DEFAULT_OPENROUTER_MODELS = [
+    "openai/gpt-5",
+    "google/gemini-2.5-pro",
+    "google/gemini-2.5-flash",
+    "meta-llama/llama-4-maverick",
+    "qwen/qwen2.5-vl-72b-instruct",
+]
 
 
 def allowed_file(filename: str) -> bool:
@@ -53,15 +63,18 @@ data_collection = db["map_data"]
 
 
 PROMPT_PATH = os.getenv("PROMPT_PATH", "prompt.txt")
+
+
 def load_prompt_template() -> str:
     p = Path(PROMPT_PATH)
     if not p.exists():
         raise RuntimeError(f"prompt file not found: {p.resolve()}")
     return p.read_text(encoding="utf-8").strip()
 
-PROMPT_TEMPLATE = load_prompt_template()
 
 PROMPT_TEMPLATE = load_prompt_template()
+
+
 def build_prompt(audience: str, purpose: str, distribution: str) -> str:
     template = load_prompt_template()  # reload every time
     return (
@@ -71,8 +84,9 @@ def build_prompt(audience: str, purpose: str, distribution: str) -> str:
         .replace("{{distribution}}", str(distribution or "unknown"))
     )
 
-def read_image_base64_from_db(image_id: str) -> tuple[str, str]:
-    """Return (mime, base64) for stored map image."""
+
+def read_image_path_from_db(image_id: str) -> tuple[str, str]:
+    """Return (path, original_name) for stored map image."""
     img = images_collection.find_one({"_id": ObjectId(image_id)})
     if not img:
         raise FileNotFoundError("Image not found")
@@ -81,16 +95,164 @@ def read_image_base64_from_db(image_id: str) -> tuple[str, str]:
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file missing: {image_path}")
 
-    ext = os.path.splitext(image_path)[1].lower()
-    mime = "image/png"
-    if ext in [".jpg", ".jpeg"]:
-        mime = "image/jpeg"
-    elif ext == ".gif":
-        mime = "image/gif"
+    original_name = str(img.get("original_name") or os.path.basename(image_path))
+    return image_path, original_name
 
-    with open(image_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("utf-8")
-    return mime, b64
+
+def _guess_mime_from_path(image_path: str) -> str:
+    ext = os.path.splitext(image_path)[1].lower()
+    if ext in [".jpg", ".jpeg"]:
+        return "image/jpeg"
+    if ext == ".gif":
+        return "image/gif"
+    return "image/png"
+
+
+def _get_env_int(name: str, default: Optional[int] = None) -> Optional[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logging.warning("Invalid integer for %s=%r, using %r", name, raw, default)
+        return default
+
+
+def _get_env_int_list(name: str, default: list[int]) -> list[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+
+    values = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            value = int(part)
+        except ValueError:
+            logging.warning("Skipping invalid integer in %s=%r", name, part)
+            continue
+        if value > 0:
+            values.append(value)
+
+    return values or default
+
+
+def _split_env_list(name: str) -> list[str]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _get_model_candidates() -> list[str]:
+    primary = os.getenv("OPENROUTER_PRIMARY_MODEL", "").strip() or "openai/gpt-5"
+    fallback_models = _split_env_list("OPENROUTER_FALLBACK_MODELS") or DEFAULT_OPENROUTER_MODELS[1:]
+
+    models = [primary] + fallback_models
+    deduped = []
+    seen = set()
+    for model in models:
+        if model not in seen:
+            seen.add(model)
+            deduped.append(model)
+    return deduped
+
+
+def _unwrap_analysis_json(analysis_json: dict) -> dict:
+    wrapped = analysis_json.get("choropleth_map_evaluation")
+    if isinstance(wrapped, dict):
+        return wrapped
+    return analysis_json
+
+
+def _flatten_to_rgb(image: Image.Image) -> Image.Image:
+    if image.mode == "RGB":
+        return image
+
+    if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+        rgba = image.convert("RGBA")
+        background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        merged = Image.alpha_composite(background, rgba)
+        return merged.convert("RGB")
+
+    return image.convert("RGB")
+
+
+def _prepare_image_for_model(image_path: str, trace_id: str) -> tuple[str, str, dict]:
+    fallback_mime = _guess_mime_from_path(image_path)
+    max_dims = _get_env_int_list("OPENROUTER_IMAGE_MAX_DIMS", [1024, 768])
+    jpeg_qualities = _get_env_int_list("OPENROUTER_IMAGE_QUALITIES", [85, 70])
+    target_b64_len = _get_env_int("OPENROUTER_MAX_IMAGE_B64_LEN", 180000)
+    resampling = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
+
+    try:
+        with Image.open(image_path) as opened_image:
+            original_size = opened_image.size
+            source_image = opened_image.copy()
+    except UnidentifiedImageError:
+        with open(image_path, "rb") as file_obj:
+            raw = file_obj.read()
+        image_base64 = base64.b64encode(raw).decode("utf-8")
+        meta = {
+            "path": image_path,
+            "original_size": None,
+            "prepared_size": None,
+            "bytes": len(raw),
+            "b64_len": len(image_base64),
+            "attempt": 0,
+        }
+        logging.info(
+            "[%s] using original image bytes path=%s bytes=%d b64_len=%d",
+            trace_id,
+            image_path,
+            len(raw),
+            len(image_base64),
+        )
+        return fallback_mime, image_base64, meta
+
+    last_payload = None
+    attempt_count = max(len(max_dims), 1)
+    for index, max_dim in enumerate(max_dims, start=1):
+        quality = jpeg_qualities[min(index - 1, len(jpeg_qualities) - 1)]
+        prepared = _flatten_to_rgb(source_image.copy())
+        if max(prepared.size) > max_dim:
+            prepared.thumbnail((max_dim, max_dim), resampling)
+
+        buffer = io.BytesIO()
+        prepared.save(buffer, format="JPEG", optimize=True, quality=quality)
+        raw = buffer.getvalue()
+        image_base64 = base64.b64encode(raw).decode("utf-8")
+        meta = {
+            "path": image_path,
+            "original_size": {"width": original_size[0], "height": original_size[1]},
+            "prepared_size": {"width": prepared.size[0], "height": prepared.size[1]},
+            "bytes": len(raw),
+            "b64_len": len(image_base64),
+            "attempt": index,
+            "quality": quality,
+        }
+        logging.info(
+            "[%s] prepared image attempt %d/%d from %sx%s to %sx%s bytes=%d b64_len=%d",
+            trace_id,
+            index,
+            attempt_count,
+            original_size[0],
+            original_size[1],
+            prepared.size[0],
+            prepared.size[1],
+            len(raw),
+            len(image_base64),
+        )
+        last_payload = ("image/jpeg", image_base64, meta)
+        if len(image_base64) <= target_b64_len:
+            break
+
+    if last_payload is None:
+        raise RuntimeError("Failed to prepare image payload for model")
+    return last_payload
 
 # JSON cleanup
 _CODE_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
@@ -221,10 +383,16 @@ def normalize_analysis(analysis_json: dict) -> dict:
     return analysis_json
 
 
-def _call_model(or_client: OpenRouter, model: str, prompt: str, mime: str, image_base64: str) -> str:
-    response = or_client.chat.send(
-        model=model,
-        messages=[
+def _call_model(
+    or_client: OpenRouter,
+    model: str,
+    prompt: str,
+    mime: str,
+    image_base64: str,
+) -> str:
+    kwargs = {
+        "model": model,
+        "messages": [
             {
                 "role": "user",
                 "content": [
@@ -233,6 +401,13 @@ def _call_model(or_client: OpenRouter, model: str, prompt: str, mime: str, image
                 ],
             }
         ],
+    }
+    max_tokens = _get_env_int("OPENROUTER_MAX_TOKENS")
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+
+    response = or_client.chat.send(
+        **kwargs
     )
     return response.choices[0].message.content
 
@@ -246,11 +421,41 @@ def _repair_to_json(or_client: OpenRouter, model: str, raw_text: str, trace_id: 
         f"{raw_text}"
     )
     logging.info("[%s] repairing invalid JSON via second pass...", trace_id)
-    response = or_client.chat.send(
-        model=model,
-        messages=[{"role": "user", "content": [{"type": "text", "text": repair_prompt}]}],
-    )
+    kwargs = {
+        "model": model,
+        "messages": [{"role": "user", "content": [{"type": "text", "text": repair_prompt}]}],
+    }
+    repair_max_tokens = _get_env_int("OPENROUTER_REPAIR_MAX_TOKENS")
+    if repair_max_tokens is not None:
+        kwargs["max_tokens"] = repair_max_tokens
+    response = or_client.chat.send(**kwargs)
     return response.choices[0].message.content
+
+
+def _call_and_parse_model(
+    or_client: OpenRouter,
+    model: str,
+    prompt: str,
+    mime: str,
+    image_base64: str,
+    trace_id: str,
+) -> tuple[str, dict]:
+    analysis_raw = _call_model(or_client, model, prompt, mime, image_base64)
+
+    try:
+        analysis_json = parse_model_json(analysis_raw)
+    except Exception as first_exc:
+        logging.warning("[%s] invalid JSON on first pass for model=%s: %s", trace_id, model, str(first_exc))
+        repaired_raw = _repair_to_json(or_client, model, analysis_raw, trace_id)
+        try:
+            analysis_json = parse_model_json(repaired_raw)
+            analysis_raw = repaired_raw
+        except Exception as second_exc:
+            raise ValueError(
+                f"Model returned invalid JSON (even after repair). first={first_exc}; second={second_exc}"
+            ) from second_exc
+
+    return analysis_raw, analysis_json
 
 
 def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribution: str, trace_id: str) -> dict:
@@ -258,55 +463,73 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
     if not api_key:
         raise RuntimeError("Missing OPENROUTER_API_KEY")
 
-    model_name = "openai/gpt-5.1"
+    model_candidates = _get_model_candidates()
     t0 = time.time()
     prompt = build_prompt(audience, purpose, distribution)
-    mime, image_base64 = read_image_base64_from_db(image_id)
-    logging.info("[%s] loaded image (b64 len=%d) in %.2fs", trace_id, len(image_base64), time.time() - t0)
+    image_path, original_name = read_image_path_from_db(image_id)
+    mime, image_base64, image_meta = _prepare_image_for_model(image_path, trace_id)
+    logging.info(
+        "[%s] running analysis for file=%s original_name=%s models=%s prepared_b64_len=%d in %.2fs",
+        trace_id,
+        image_path,
+        original_name,
+        model_candidates,
+        len(image_base64),
+        time.time() - t0,
+    )
 
+    analysis_raw = None
+    analysis_json = None
+    model_used = None
+    last_error = None
     with OpenRouter(api_key=api_key) as or_client:
-        logging.info("[%s] calling model...", trace_id)
-        analysis_raw = _call_model(or_client, model_name, prompt, mime, image_base64)
-
-        # Parse JSON (with auto-repair on failure)
-        try:
-            analysis_json = parse_model_json(analysis_raw)
-        except Exception as e1:
-            logging.warning("[%s] invalid JSON on first pass: %s", trace_id, str(e1))
-            repaired_raw = _repair_to_json(or_client, model_name, analysis_raw, trace_id)
+        for model_name in model_candidates:
             try:
-                analysis_json = parse_model_json(repaired_raw)
-                analysis_raw = repaired_raw  # keep latest
-            except Exception as e2:
-                # Save failure for debugging
-                results_collection.insert_one(
-                    {
-                        "trace_id": trace_id,
-                        "image_id": image_id,
-                        "analysis_raw": analysis_raw,
-                        "analysis_repair_raw": repaired_raw,
-                        "parse_error": f"first={e1}; second={e2}",
-                        "created_at": now_utc(),
-                        "audience": audience,
-                        "purpose": purpose,
-                        "distribution": distribution,
-                        "model": model_name,
-                        "elapsed_s": round(time.time() - t0, 3),
-                        "status": "parse_failed",
-                    }
+                logging.info("[%s] trying model=%s", trace_id, model_name)
+                analysis_raw, analysis_json = _call_and_parse_model(
+                    or_client,
+                    model_name,
+                    prompt,
+                    mime,
+                    image_base64,
+                    trace_id,
                 )
-                return {
-                    "status": "error",
-                    "error": "Model returned invalid JSON (even after repair).",
-                    "trace_id": trace_id,
-                }
+                model_used = model_name
+                break
+            except Exception as exc:
+                last_error = exc
+                logging.warning("[%s] model=%s failed, trying next fallback (%s)", trace_id, model_name, exc)
 
-    # Normalize for downstream (RANGE edges/intervals)
+    if analysis_json is None or model_used is None or analysis_raw is None:
+        results_collection.insert_one(
+            {
+                "trace_id": trace_id,
+                "image_id": image_id,
+                "analysis_raw": analysis_raw,
+                "parse_error": str(last_error) if last_error else "Unknown model failure",
+                "created_at": now_utc(),
+                "audience": audience,
+                "purpose": purpose,
+                "distribution": distribution,
+                "model_candidates": model_candidates,
+                "image_meta": image_meta,
+                "elapsed_s": round(time.time() - t0, 3),
+                "status": "model_failed",
+            }
+        )
+        return {
+            "status": "error",
+            "error": str(last_error) if last_error else "All model attempts failed.",
+            "trace_id": trace_id,
+            "image_path": image_path,
+            "model_candidates": model_candidates,
+        }
+
+    analysis_json = _unwrap_analysis_json(analysis_json)
     analysis_json = normalize_analysis(analysis_json)
 
-    logging.info("[%s] model returned & parsed in %.2fs", trace_id, time.time() - t0)
+    logging.info("[%s] model=%s returned and parsed in %.2fs", trace_id, model_used, time.time() - t0)
 
-    # Save structured +raw
     results_collection.insert_one(
         {
             "trace_id": trace_id,
@@ -317,7 +540,11 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
             "audience": audience,
             "purpose": purpose,
             "distribution": distribution,
-            "model": model_name,
+            "model": model_used,
+            "model_candidates": model_candidates,
+            "image_path": image_path,
+            "image_name": original_name,
+            "image_meta": image_meta,
             "elapsed_s": round(time.time() - t0, 3),
             "status": "ok",
         }
@@ -326,8 +553,13 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
     return {
         "status": "success",
         "trace_id": trace_id,
-        "analysis": analysis_json,   #returns object, not string
-        "analysis_raw": analysis_raw, 
+        "analysis": analysis_json,
+        "analysis_raw": analysis_raw,
+        "model_used": model_used,
+        "model_candidates": model_candidates,
+        "image_path": image_path,
+        "image_name": original_name,
+        "image_meta": image_meta,
     }
 
 
