@@ -1,4 +1,6 @@
+import html
 import json
+import re
 
 import streamlit as st
 
@@ -14,6 +16,16 @@ BINNING_KEYS = {
     "classification_appropriateness",
 }
 
+TOPIC_RULES = [
+    ("Color", ("color", "colour")),
+    ("Legend", ("legend",)),
+    ("Title", ("title", "subtitle")),
+    ("Source", ("source", "citation")),
+    ("Geography", ("region", "geographic", "projection", "administrative")),
+    ("Data", ("data", "normalization", "variable", "coverage")),
+    ("Map", ("map", "choropleth", "readability", "visual")),
+]
+
 
 def _as_str(value, default="unknown"):
     if value is None:
@@ -28,6 +40,20 @@ def _as_str(value, default="unknown"):
     return text if text else default
 
 
+def _format_text_for_html(value) -> str:
+    text = _as_str(value, default="")
+    if not text:
+        return ""
+
+    # Remove lightweight Markdown markers that should not leak into card UI.
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"__(.*?)__", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = text.replace("**", "").replace("__", "")
+
+    return html.escape(text).replace("\n", "<br>")
+
+
 def _get_obj(data: dict, key: str):
     if not isinstance(data, dict):
         return None
@@ -40,17 +66,25 @@ def _leaf_from_path(path: str) -> str:
     return base.split(".")[-1]
 
 
-def _section_for_item(path: str) -> str:
-    base = path.split("[", 1)[0]
-    leaf = _leaf_from_path(path)
+def _section_for_item(path: str, quality: str) -> str:
+    if (quality or "").lower().strip() == "meta":
+        return "Metadata"
+    return "Map-related"
 
-    if leaf in BINNING_KEYS:
-        return "Binning related"
 
-    if base.startswith("facts.metadata."):
-        return "Other"
+def _topic_for_item(path: str, label: str, section: str) -> str:
+    haystack = f"{path} {label}".lower()
 
-    return "Map related"
+    if _leaf_from_path(path) in BINNING_KEYS:
+        return "Binning"
+
+    for topic, keywords in TOPIC_RULES:
+        if any(keyword in haystack for keyword in keywords):
+            return topic
+
+    if section == "Metadata":
+        return "Metadata"
+    return "Map"
 
 
 def build_criteria_items(analysis_json: dict):
@@ -131,7 +165,6 @@ def build_criteria_items(analysis_json: dict):
             item_id = path or "unknown"
             item = {
                 "id": item_id,
-                "section": _section_for_item(item_id),
                 "label": label_for(item_id),
                 "value": _as_str(obj.get("value")),
                 "quality": _as_str(obj.get("quality"), "neutral").lower().strip(),
@@ -139,6 +172,8 @@ def build_criteria_items(analysis_json: dict):
                 "fixes": _as_str(obj.get("fixes"), "none"),
                 "raw": obj,
             }
+            item["section"] = _section_for_item(item_id, item["quality"])
+            item["topic"] = _topic_for_item(item_id, item["label"], item["section"])
             items.append(item)
             item_by_id[item_id] = item
             return
@@ -154,57 +189,155 @@ def build_criteria_items(analysis_json: dict):
 
     walk(extract, "")
 
-    section_order = {"Binning related": 0, "Map related": 1, "Other": 2}
+    section_order = {"Binning": 0, "Map-related": 1, "Metadata": 2}
     items.sort(key=lambda item: (section_order.get(item["section"], 9), item["label"].lower(), item["id"].lower()))
     return items, item_by_id
 
 
-def _render_item_list(items: list, empty_text: str):
+def _quality_chip(quality: str) -> str:
+    quality = (quality or "neutral").lower().strip()
+    if quality == "good":
+        return '<span class="criterion-chip good">GOOD</span>'
+    if quality == "bad":
+        return '<span class="criterion-chip bad">BAD</span>'
+    if quality == "meta":
+        return '<span class="criterion-chip meta">META</span>'
+    return '<span class="criterion-chip neutral">NEUTRAL</span>'
+
+
+def _topic_chip(topic: str) -> str:
+    return f'<span class="criterion-topic-chip">{_format_text_for_html(topic)}</span>'
+
+
+def _render_filters(items: list, filter_key: str):
+    show_status_filter = filter_key == "map_related"
+    qualities = ["good", "neutral", "bad"] if show_status_filter else []
+
+    topics = sorted({item.get("topic", "Other") for item in items})
+    quality_key = f"{filter_key}_qualities"
+    topic_key = f"{filter_key}_topics"
+
+    if show_status_filter:
+        current_qualities = st.session_state.get(quality_key)
+        if not isinstance(current_qualities, list) or any(value not in qualities for value in current_qualities):
+            st.session_state[quality_key] = qualities.copy()
+
+    current_topics = st.session_state.get(topic_key)
+    if not isinstance(current_topics, list) or any(value not in topics for value in current_topics):
+        st.session_state[topic_key] = topics.copy()
+
+    if show_status_filter:
+        col1, col2 = st.columns(2, gap="small")
+        with col1:
+            selected_qualities = st.multiselect(
+                "Status",
+                options=qualities,
+                key=quality_key,
+                placeholder="Choose status",
+            )
+        with col2:
+            selected_topics = st.multiselect(
+                "Topic",
+                options=topics,
+                key=topic_key,
+                placeholder="Choose topic",
+            )
+    else:
+        selected_topics = st.multiselect(
+            "Topic",
+            options=topics,
+            key=topic_key,
+            placeholder="Choose topic",
+        )
+        selected_qualities = None
+
+    return selected_qualities, selected_topics
+
+
+def render_item_cards(items: list, empty_text: str, filter_key: str | None = None, section_name: str | None = None):
     if not items:
         st.caption(empty_text)
         return
 
-    icon_map = {
-        "good": "[GOOD]",
-        "bad": "[BAD]",
-        "neutral": "[NEUTRAL]",
-        "meta": "[META]",
-    }
+    filtered_items = items
+    if filter_key:
+        selected_qualities, selected_topics = _render_filters(items, filter_key)
+        filtered_items = [
+            item
+            for item in items
+            if (selected_qualities is None or item.get("quality") in selected_qualities)
+            and item.get("topic") in selected_topics
+        ]
 
-    for item in items:
-        quality = (item.get("quality") or "neutral").lower().strip()
-        icon = icon_map.get(quality, "[NEUTRAL]")
-        title = f"{icon} {item.get('label', 'Unknown')} [{quality.upper()}]"
+        if not filtered_items:
+            if filter_key == "map_related" and selected_qualities and "bad" in selected_qualities:
+                bad_count = sum(1 for item in items if item.get("quality") == "bad")
+                if bad_count == 0:
+                    st.caption("No bad items exist in Map-related for this analysis. Any score reduction is likely coming from Binning.")
+                    return
+            st.caption("No items match the current filters.")
+            return
 
-        with st.expander(title, expanded=False):
-            st.markdown(f"**Value:** {item.get('value', '')}")
-            st.markdown(f"**Explanation:** {item.get('explanation', '')}")
-            fixes = item.get("fixes", "none")
-            if fixes and str(fixes).strip().lower() != "none":
-                st.markdown(f"**Fixes:** {fixes}")
+    for item in filtered_items:
+        value_html = _format_text_for_html(item.get("value", ""))
+        explanation_html = _format_text_for_html(item.get("explanation", ""))
+        fixes = item.get("fixes", "none")
+        fixes_html = _format_text_for_html(fixes)
+        label_html = _format_text_for_html(item.get("label", "Unknown"))
+        fixes_block = ""
+        if fixes and str(fixes).strip().lower() != "none":
+            fixes_block = (
+                '<div class="criterion-row">'
+                '<div class="criterion-key">Fixes</div>'
+                f'<div class="criterion-body">{fixes_html}</div>'
+                "</div>"
+            )
+
+        head_left = (
+            '<div class="criterion-head-left">'
+            f'<div class="criterion-title">{label_html}</div>'
+            f'{_topic_chip(item.get("topic", "Other"))}'
+            "</div>"
+        )
+
+        st.markdown(
+            (
+                '<div class="criterion-card">'
+                '<div class="criterion-head">'
+                f"{head_left}"
+                f'<div class="criterion-chip-wrap">{_quality_chip(item.get("quality", "neutral"))}</div>'
+                "</div>"
+                '<div class="criterion-row">'
+                '<div class="criterion-key">Value</div>'
+                f'<div class="criterion-body">{value_html}</div>'
+                "</div>"
+                '<div class="criterion-row">'
+                '<div class="criterion-key">Explanation</div>'
+                f'<div class="criterion-body">{explanation_html}</div>'
+                "</div>"
+                f"{fixes_block}"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
 
 
-def render_details(analysis_json: dict, items: list):
-    st.subheader("Details")
-
+def render_details_panel(analysis_json: dict, items: list):
     if not items:
         st.info("No detail items were found in the analysis JSON.")
         st.json(analysis_json)
         return
 
-    binning_items = [item for item in items if item.get("section") == "Binning related"]
-    map_items = [item for item in items if item.get("section") == "Map related"]
-    other_items = [item for item in items if item.get("section") == "Other"]
+    binning_items = [item for item in items if item.get("section") == "Binning"]
+    map_items = [item for item in items if item.get("section") == "Map-related"]
+    metadata_items = [item for item in items if item.get("section") == "Metadata"]
 
-    st.markdown("#### Binning related")
-    _render_item_list(binning_items, "No binning-related details were found.")
+    binning_tab, map_tab, metadata_tab = st.tabs(["Binning", "Map-related", "Metadata"])
 
-    st.markdown("#### Map related")
-    _render_item_list(map_items, "No map-related details were found.")
+    with map_tab:
+        render_item_cards(map_items, "No map-related details were found.", filter_key="map_related", section_name="Map-related")
 
-    st.markdown("#### Other")
-    _render_item_list(other_items, "No metadata details were found.")
+    with metadata_tab:
+        render_item_cards(metadata_items, "No metadata details were found.", filter_key="metadata", section_name="Metadata")
 
-
-def render_criteria(analysis_json: dict, items: list):
-    render_details(analysis_json, items)
+    return binning_tab, binning_items

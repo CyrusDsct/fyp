@@ -1,4 +1,154 @@
 import numpy as np
+
+try:
+    import mapclassify
+except ImportError:
+    mapclassify = None
+
+
+def _clean_numeric_data(data):
+    arr = np.asarray(data, dtype=float).reshape(-1)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        raise ValueError("No finite numeric data available.")
+    return arr
+
+
+def _unique_sorted_edges(edges):
+    arr = np.asarray(edges, dtype=float).reshape(-1)
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        return arr
+    return np.unique(np.sort(arr))
+
+
+def _require_mapclassify():
+    if mapclassify is None:
+        raise ImportError("mapclassify is required for this binning method. Install requirements.txt.")
+    return mapclassify
+
+
+def _edges_from_mapclassify(data, classifier):
+    data = _clean_numeric_data(data)
+    upper_bounds = np.asarray(classifier.bins, dtype=float).reshape(-1)
+    edges = [float(np.min(data))]
+    edges.extend([float(x) for x in upper_bounds if np.isfinite(x)])
+    maxv = float(np.max(data))
+    if edges[-1] < maxv:
+        edges.append(maxv)
+    return _unique_sorted_edges(edges)
+
+
+def _nice_interval(raw_interval):
+    if raw_interval <= 0 or not np.isfinite(raw_interval):
+        return raw_interval
+    mag = 10 ** np.floor(np.log10(raw_interval))
+    scaled = raw_interval / mag
+    if scaled <= 1:
+        nice = 1
+    elif scaled <= 2:
+        nice = 2
+    elif scaled <= 5:
+        nice = 5
+    else:
+        nice = 10
+    return nice * mag
+
+
+def _digitize_assignments(data, edges):
+    edges = _unique_sorted_edges(edges)
+    if edges.size < 2:
+        return None
+    bins = edges.size - 1
+    assignments = np.digitize(data, edges[1:-1], right=True)
+    return np.clip(assignments, 0, bins - 1)
+
+
+def mc_equal_interval(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.EqualInterval(data, k=int(bins)))
+
+
+def mc_quantile_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.Quantiles(data, k=int(bins)))
+
+
+def mc_percentile_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.Percentiles(data))
+
+
+def mc_pretty_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.PrettyBreaks(data, k=int(bins)))
+
+
+def mc_boxplot_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.BoxPlot(data))
+
+
+def mc_stdev_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.StdMean(data))
+
+
+def mc_maxbreaks_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.MaximumBreaks(data, k=int(bins)))
+
+
+def mc_natural_breaks(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.NaturalBreaks(data, k=int(bins)))
+
+
+def mc_ckmeans_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.FisherJenks(data, k=int(bins)))
+
+
+def mc_headtail_bins(data, bins):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    return _edges_from_mapclassify(data, mc.HeadTailBreaks(data))
+
+
+def mc_defined_interval(data, bins, interval=None):
+    mc = _require_mapclassify()
+    data = _clean_numeric_data(data)
+    minv = float(np.min(data))
+    maxv = float(np.max(data))
+    if minv == maxv:
+        return np.array([minv, maxv])
+
+    if interval is None or interval <= 0 or not np.isfinite(interval):
+        interval = _nice_interval((maxv - minv) / max(int(bins), 1))
+
+    upper_bounds = []
+    current = minv + interval
+    guard = 0
+    while current < maxv and guard < 1000:
+        upper_bounds.append(float(current))
+        current += interval
+        guard += 1
+    upper_bounds.append(maxv)
+    return _edges_from_mapclassify(data, mc.UserDefined(data, bins=upper_bounds))
+
+
+def unclassed_bins(data, bins):
+    data = _clean_numeric_data(data)
+    return np.array([float(np.min(data)), float(np.max(data))])
 # ============================================================
 # Divide the data range (max - min) into equal-sized intervals.
 # Each bin has the same numeric width.
@@ -293,16 +443,67 @@ def natural_breaks(data, bins):
     return np.array(kclass)
 
 
+def resiliency_bins(data, bins):
+    data = np.sort(_clean_numeric_data(data))
+    candidate_methods = [
+        mc_equal_interval,
+        mc_quantile_bins,
+        mc_pretty_bins,
+        mc_maxbreaks_bins,
+        mc_natural_breaks,
+        mc_ckmeans_bins,
+    ]
+
+    assignment_rows = []
+    for method in candidate_methods:
+        try:
+            edges = method(data, bins)
+            assignments = _digitize_assignments(data, edges)
+            if assignments is not None and len(assignments) == len(data):
+                assignment_rows.append(assignments)
+        except Exception:
+            pass
+
+    if not assignment_rows:
+        return mc_quantile_bins(data, bins)
+
+    matrix = np.vstack(assignment_rows)
+    consensus = []
+    i = 0
+    while i < matrix.shape[1]:
+        vals, counts = np.unique(matrix[:, i], return_counts=True)
+        consensus.append(int(vals[np.argmax(counts)]))
+        i += 1
+
+    consensus = np.maximum.accumulate(np.array(consensus, dtype=int))
+    edges = [float(data[0])]
+    i = 1
+    while i < len(data):
+        if consensus[i] != consensus[i - 1]:
+            edges.append(float(data[i]))
+        i += 1
+    edges.append(float(data[-1]))
+
+    edges = _unique_sorted_edges(edges)
+    if edges.size < 2:
+        return mc_quantile_bins(data, bins)
+    return edges
+
+
 BIN_METHODS = {
-    "Equal Interval": equal_interval,
+    "Unclassed": unclassed_bins,
+    "Defined Interval": mc_defined_interval,
+    "Equal Interval": mc_equal_interval,
     "Exponential": exponential_bins,
     "Geometric Interval": geometric_interval,
-    "Max Breaks": maxbreaks_bins,
-    "Quantile": quantile_bins,
-    "Pretty": pretty_bins,
-    "Natural Breaks (Jenks-like)": natural_breaks,
-    # Methods without `bins` in signature are wrapped to accept (data, bins)
-    "Boxplot (IQR)": (lambda data, bins: boxplot_bins(data)),
-    "Head/Tail Breaks": (lambda data, bins: headtail_bins(data)),
-    "Std Dev": (lambda data, bins: stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0)),
+    "Maximum Breaks": mc_maxbreaks_bins,
+    "Quantile": mc_quantile_bins,
+    "Pretty Breaks": mc_pretty_bins,
+    "Natural Breaks": mc_natural_breaks,
+    "Fisher-Jenks": mc_ckmeans_bins,
+    "Percentile": mc_percentile_bins,
+    "Resiliency": resiliency_bins,
+    "Box Plot": mc_boxplot_bins,
+    "Head/Tail Breaks": mc_headtail_bins,
+    "Standard Deviation": mc_stdev_bins,
 }

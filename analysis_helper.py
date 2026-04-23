@@ -1,17 +1,48 @@
 import json
+from typing import Any
+
+
+CLASSIFICATION_METHODS = {
+    "Unclassed",
+    "Defined Interval",
+    "Equal Interval",
+    "Pretty Breaks",
+    "Geometric",
+    "Geometric Interval",
+    "Exponential",
+    "Manual Interval",
+    "Manual Intervals",
+    "Quantile",
+    "Percentile",
+    "Box Plot",
+    "Boxplot Interquartile Range",
+    "Standard Deviation",
+    "Maximum Breaks",
+    "Natural Breaks",
+    "CK-Means",
+    "Head Tail Breaks",
+    "Head/Tail Breaks",
+    "Resiliency",
+}
+
 
 def parse_analysis_json(raw: str):
     if not raw:
         return None
+
     try:
         return json.loads(raw)
     except Exception:
         pass
+
     try:
         start = raw.index("{")
         end = raw.rindex("}") + 1
-        snippet = raw[start:end]
-        return json.loads(snippet)
+    except ValueError:
+        return None
+
+    try:
+        return json.loads(raw[start:end])
     except Exception:
         return None
 
@@ -20,7 +51,7 @@ def get_overall_text(ana_dict: dict) -> str:
     if not isinstance(ana_dict, dict):
         return "No structured JSON found in analysis."
 
-    info = ana_dict.get("info", {})
+    info = ana_dict.get("info", {}) or {}
     explanation = ana_dict.get("explanation")
     map_quality = ana_dict.get("map_quality")
 
@@ -30,14 +61,13 @@ def get_overall_text(ana_dict: dict) -> str:
     if map_quality:
         parts.append(f"**Map quality / reasoning**\n\n{map_quality}")
 
-    if not parts:
-        title = info.get("map_title")
-        if title:
-            parts.append(f"**Map title**: {title}")
-        else:
-            parts.append("No explanation/map_quality fields found in JSON.")
+    if parts:
+        return "\n\n---\n\n".join(parts)
 
-    return "\n\n---\n\n".join(parts)
+    title = info.get("map_title")
+    if title:
+        return f"**Map title**: {title}"
+    return "No explanation/map_quality fields found in JSON."
 
 
 def make_item(label, key_path, value, status, detail=None):
@@ -52,190 +82,179 @@ def make_item(label, key_path, value, status, detail=None):
 
 def status_to_icon(status: str):
     if status == "good":
-        return "🟢"
+        return "GOOD"
     if status == "bad":
-        return "❌"
-    return "⚠️"
+        return "BAD"
+    return "UNKNOWN"
 
 
 def get_value_by_path(analysis_json, path):
-    cur = analysis_json
+    current = analysis_json
     try:
-        for p in path:
-            cur = cur[p]
-        return cur
+        for part in path:
+            current = current[part]
+        return current
     except Exception:
         return None
 
 
-def evaluate_fields(analysis_json: dict):
-    items = []
-    if not isinstance(analysis_json, dict):
-        return items
+def _append(items: list[dict[str, Any]], label: str, path, value, status: str, detail: str | None = None):
+    items.append(make_item(label, path, value, status, detail))
 
+
+def evaluate_fields(analysis_json: dict):
+    if not isinstance(analysis_json, dict):
+        return []
+
+    items = []
     info = analysis_json.get("info", {}) or {}
     legend = info.get("legend", {}) or {}
 
-    # MAP TITLE
     map_title = info.get("map_title")
-    if map_title and isinstance(map_title, str) and map_title.strip():
-        items.append(make_item("Map title", ("info", "map_title"),
-                               map_title, "good"))
+    if isinstance(map_title, str) and map_title.strip():
+        _append(items, "Map title", ("info", "map_title"), map_title, "good")
     else:
-        items.append(make_item("Map title", ("info", "map_title"),
-                               map_title, "bad", "No map title found."))
+        _append(items, "Map title", ("info", "map_title"), map_title, "bad", "No map title found.")
 
-    # URL
     url = info.get("url")
-    if not url or url in ["None", "Not Applicable", "not applicable"]:
-        items.append(make_item("URL", ("info", "url"),
-                               url, "bad", "No valid source URL."))
+    if not url or url in {"None", "Not Applicable", "not applicable"}:
+        _append(items, "URL", ("info", "url"), url, "bad", "No valid source URL.")
     else:
-        items.append(make_item("URL", ("info", "url"), url, "good"))
+        _append(items, "URL", ("info", "url"), url, "good")
 
-    # CITATIONS
     citations = info.get("citations")
-    if citations and isinstance(citations, str) and citations.strip():
-        items.append(make_item("Citations", ("info", "citations"),
-                               citations, "good"))
+    if isinstance(citations, str) and citations.strip():
+        _append(items, "Citations", ("info", "citations"), citations, "good")
     else:
-        items.append(make_item("Citations", ("info", "citations"),
-                               citations, "unknown",
-                               "No explicit citation text detected."))
+        _append(items, "Citations", ("info", "citations"), citations, "unknown", "No explicit citation text detected.")
 
-    # HAS LEGEND 
-    legend_dict = legend
-    has_legend = legend_dict.get("has_legend")
+    has_legend = legend.get("has_legend")
     if has_legend == "yes":
-        items.append(make_item("Legend present",
-                               ("info", "legend", "has_legend"),
-                               has_legend, "good"))
+        _append(items, "Legend present", ("info", "legend", "has_legend"), has_legend, "good")
     elif has_legend == "no":
-        items.append(make_item("Legend present",
-                               ("info", "legend", "has_legend"),
-                               has_legend, "bad",
-                               "Choropleth without legend."))
+        _append(
+            items,
+            "Legend present",
+            ("info", "legend", "has_legend"),
+            has_legend,
+            "bad",
+            "Choropleth without legend.",
+        )
     else:
-        items.append(make_item("Legend present",
-                               ("info", "legend", "has_legend"),
-                               has_legend, "unknown"))
+        _append(items, "Legend present", ("info", "legend", "has_legend"), has_legend, "unknown")
 
-    # LEGEND ORIENTATION
-    orient = legend_dict.get("orientation")
-    if orient in ["horizontal", "vertical", "other", "not applicable"]:
-        items.append(make_item("Legend orientation",
-                               ("info", "legend", "orientation"),
-                               orient, "unknown"))
+    orientation = legend.get("orientation")
+    if orientation in {"horizontal", "vertical", "other", "not applicable"}:
+        _append(items, "Legend orientation", ("info", "legend", "orientation"), orientation, "unknown")
     else:
-        items.append(make_item("Legend orientation",
-                               ("info", "legend", "orientation"),
-                               orient, "unknown",
-                               "Orientation not clearly identified."))
+        _append(
+            items,
+            "Legend orientation",
+            ("info", "legend", "orientation"),
+            orientation,
+            "unknown",
+            "Orientation not clearly identified.",
+        )
 
-    # RANGE
-    legend_range = legend_dict.get("range")
+    legend_range = legend.get("range")
     if legend_range is None:
-        status, detail = "bad", "No range information for legend."
+        _append(items, "Range", ("info", "legend", "range"), legend_range, "bad", "No range information for legend.")
+    elif isinstance(legend_range, list) and legend_range:
+        _append(items, "Range", ("info", "legend", "range"), legend_range, "good")
     else:
-        status, detail = "unknown", None
-        try:
-            if isinstance(legend_range, list) and legend_range:
-                status = "good"
-        except Exception:
-            status = "unknown"
-    items.append(make_item("Range", ("info", "legend", "range"),
-                           legend_range, status, detail))
+        _append(items, "Range", ("info", "legend", "range"), legend_range, "unknown")
 
-    # NO DATA
-    no_data = legend_dict.get("no_data")
+    no_data = legend.get("no_data")
     if no_data == "yes":
-        items.append(make_item("No data category",
-                               ("info", "legend", "no_data"),
-                               no_data, "good"))
+        _append(items, "No data category", ("info", "legend", "no_data"), no_data, "good")
     elif no_data == "no":
-        items.append(make_item("No data category",
-                               ("info", "legend", "no_data"),
-                               no_data, "bad",
-                               "No-data regions may be ambiguous."))
+        _append(
+            items,
+            "No data category",
+            ("info", "legend", "no_data"),
+            no_data,
+            "bad",
+            "No-data regions may be ambiguous.",
+        )
     else:
-        items.append(make_item("No data category",
-                               ("info", "legend", "no_data"),
-                               no_data, "unknown"))
+        _append(items, "No data category", ("info", "legend", "no_data"), no_data, "unknown")
 
-    # EXPLICIT OTHER
-    exp_other = legend_dict.get("explicit_other")
-    if exp_other == "yes":
-        items.append(make_item("Explicit 'Other' category",
-                               ("info", "legend", "explicit_other"),
-                               exp_other, "good"))
-    elif exp_other == "no":
-        items.append(make_item("Explicit 'Other' category",
-                               ("info", "legend", "explicit_other"),
-                               exp_other, "unknown",
-                               "May not be needed depending on semantic type."))
+    explicit_other = legend.get("explicit_other")
+    if explicit_other == "yes":
+        _append(items, "Explicit 'Other' category", ("info", "legend", "explicit_other"), explicit_other, "good")
+    elif explicit_other == "no":
+        _append(
+            items,
+            "Explicit 'Other' category",
+            ("info", "legend", "explicit_other"),
+            explicit_other,
+            "unknown",
+            "May not be needed depending on semantic type.",
+        )
     else:
-        items.append(make_item("Explicit 'Other' category",
-                               ("info", "legend", "explicit_other"),
-                               exp_other, "unknown"))
+        _append(items, "Explicit 'Other' category", ("info", "legend", "explicit_other"), explicit_other, "unknown")
 
-    # INCOMPLETE INFO
-    incomplete = legend_dict.get("incomplete_info")
-    if incomplete == "no":
-        items.append(make_item("Incomplete info",
-                               ("info", "legend", "incomplete_info"),
-                               incomplete, "good"))
-    elif incomplete == "yes":
-        items.append(make_item("Incomplete info",
-                               ("info", "legend", "incomplete_info"),
-                               incomplete, "bad",
-                               "Legend is missing some colours/data."))
+    incomplete_info = legend.get("incomplete_info")
+    if incomplete_info == "no":
+        _append(items, "Incomplete info", ("info", "legend", "incomplete_info"), incomplete_info, "good")
+    elif incomplete_info == "yes":
+        _append(
+            items,
+            "Incomplete info",
+            ("info", "legend", "incomplete_info"),
+            incomplete_info,
+            "bad",
+            "Legend is missing some colours/data.",
+        )
     else:
-        items.append(make_item("Incomplete info",
-                               ("info", "legend", "incomplete_info"),
-                               incomplete, "unknown"))
+        _append(items, "Incomplete info", ("info", "legend", "incomplete_info"), incomplete_info, "unknown")
 
-    # DATA TYPE
-    data_type = legend_dict.get("data_type")
-    if data_type in ["nominal", "ordinal", "interval", "ratio"]:
-        items.append(make_item("Data type",
-                               ("info", "legend", "data_type"),
-                               data_type, "good"))
+    data_type = legend.get("data_type")
+    if data_type in {"nominal", "ordinal", "interval", "ratio"}:
+        _append(items, "Data type", ("info", "legend", "data_type"), data_type, "good")
     else:
-        items.append(make_item("Data type",
-                               ("info", "legend", "data_type"),
-                               data_type, "bad",
-                               "Data type not clearly identified."))
+        _append(
+            items,
+            "Data type",
+            ("info", "legend", "data_type"),
+            data_type,
+            "bad",
+            "Data type not clearly identified.",
+        )
 
-    # CONTIGUITY
-    contig = legend_dict.get("contiguity")
-    if contig in ["yes", "no", "not applicable"]:
-        items.append(make_item("Contiguity",
-                               ("info", "legend", "contiguity"),
-                               contig, "unknown"))
+    contiguity = legend.get("contiguity")
+    if contiguity in {"yes", "no", "not applicable"}:
+        _append(items, "Contiguity", ("info", "legend", "contiguity"), contiguity, "unknown")
     else:
-        items.append(make_item("Contiguity",
-                               ("info", "legend", "contiguity"),
-                               contig, "unknown",
-                               "Contiguity not clearly specified."))
+        _append(
+            items,
+            "Contiguity",
+            ("info", "legend", "contiguity"),
+            contiguity,
+            "unknown",
+            "Contiguity not clearly specified.",
+        )
 
-    # NUMBER OF BINS
-    num_bins = legend_dict.get("num_bins")
-    status, detail = "unknown", ""
+    num_bins = legend.get("num_bins")
     if isinstance(num_bins, int):
         if 3 <= num_bins <= 7:
-            status = "good"
+            _append(items, "Number of bins", ("info", "legend", "num_bins"), num_bins, "good")
         else:
-            status = "bad"
-            detail = "Too few or too many bins for clear interpretation."
+            _append(
+                items,
+                "Number of bins",
+                ("info", "legend", "num_bins"),
+                num_bins,
+                "bad",
+                "Too few or too many bins for clear interpretation.",
+            )
     elif isinstance(num_bins, str) and num_bins.lower() == "not applicable":
-        status = "unknown"
-    items.append(make_item("Number of bins",
-                           ("info", "legend", "num_bins"),
-                           num_bins, status, detail))
+        _append(items, "Number of bins", ("info", "legend", "num_bins"), num_bins, "unknown")
+    else:
+        _append(items, "Number of bins", ("info", "legend", "num_bins"), num_bins, "unknown")
 
-    # COLOUR SCHEME
-    colour_scheme = legend_dict.get("colour_scheme")
-    if colour_scheme in [
+    colour_scheme = legend.get("colour_scheme")
+    if colour_scheme in {
         "Sequential Single-hue",
         "Sequential Multi-hue",
         "Categorical",
@@ -243,122 +262,123 @@ def evaluate_fields(analysis_json: dict):
         "Cyclic",
         "Other",
         "Not Applicable",
-    ]:
-        items.append(make_item("Colour scheme",
-                               ("info", "legend", "colour_scheme"),
-                               colour_scheme, "good"))
+    }:
+        _append(items, "Colour scheme", ("info", "legend", "colour_scheme"), colour_scheme, "good")
     else:
-        items.append(make_item("Colour scheme",
-                               ("info", "legend", "colour_scheme"),
-                               colour_scheme, "bad",
-                               "Colour scheme not identified."))
+        _append(
+            items,
+            "Colour scheme",
+            ("info", "legend", "colour_scheme"),
+            colour_scheme,
+            "bad",
+            "Colour scheme not identified.",
+        )
 
-    # COLOURS
-    colours = legend_dict.get("colours")
+    colours = legend.get("colours")
     if colours:
-        items.append(make_item("Colours",
-                               ("info", "legend", "colours"),
-                               colours, "unknown"))
+        _append(items, "Colours", ("info", "legend", "colours"), colours, "unknown")
     else:
-        items.append(make_item("Colours",
-                               ("info", "legend", "colours"),
-                               colours, "unknown",
-                               "No explicit list of legend colours."))
+        _append(
+            items,
+            "Colours",
+            ("info", "legend", "colours"),
+            colours,
+            "unknown",
+            "No explicit list of legend colours.",
+        )
 
-    # LEGEND PLACEMENT
-    placement = legend_dict.get("placement")
-    if placement in [
-        "top left", "top center", "top right",
-        "middle left", "center", "middle right",
-        "bottom left", "bottom center", "bottom right",
-    ]:
+    placement = legend.get("placement")
+    valid_placements = {
+        "top left",
+        "top center",
+        "top right",
+        "middle left",
+        "center",
+        "middle right",
+        "bottom left",
+        "bottom center",
+        "bottom right",
+    }
+    if placement in valid_placements:
         if placement == "center":
-            status, detail = "bad", "Legend centered may obscure map content."
+            _append(
+                items,
+                "Legend placement",
+                ("info", "legend", "placement"),
+                placement,
+                "bad",
+                "Legend centered may obscure map content.",
+            )
         else:
-            status, detail = "good", None
-        items.append(make_item("Legend placement",
-                               ("info", "legend", "placement"),
-                               placement, status, detail))
+            _append(items, "Legend placement", ("info", "legend", "placement"), placement, "good")
     else:
-        items.append(make_item("Legend placement",
-                               ("info", "legend", "placement"),
-                               placement, "unknown"))
+        _append(items, "Legend placement", ("info", "legend", "placement"), placement, "unknown")
 
-    # BORDER FOR LEGEND
-    border = legend_dict.get("border")
-    if border in ["yes", "no", "not applicable"]:
-        items.append(make_item("Legend border",
-                               ("info", "legend", "border"),
-                               border, "unknown"))
+    border = legend.get("border")
+    if border in {"yes", "no", "not applicable"}:
+        _append(items, "Legend border", ("info", "legend", "border"), border, "unknown")
     else:
-        items.append(make_item("Legend border",
-                               ("info", "legend", "border"),
-                               border, "unknown",
-                               "Border information not clear."))
+        _append(
+            items,
+            "Legend border",
+            ("info", "legend", "border"),
+            border,
+            "unknown",
+            "Border information not clear.",
+        )
 
-    # VARIABLES
     variables = info.get("variables")
     if isinstance(variables, int) and variables >= 1:
         if variables == 1:
-            status, detail = "good", None
+            _append(items, "Variables", ("info", "variables"), variables, "good")
         else:
-            status, detail = "unknown", "Multiple variables may increase complexity."
+            _append(items, "Variables", ("info", "variables"), variables, "unknown", "Multiple variables may increase complexity.")
     else:
-        status, detail = "bad", "Number of variables not clearly identified."
-    items.append(make_item("Variables",
-                           ("info", "variables"),
-                           variables, status, detail))
+        _append(items, "Variables", ("info", "variables"), variables, "bad", "Number of variables not clearly identified.")
 
-    # FREQUENCY
     frequency = info.get("frequency")
-    if frequency in ["yes", "no"]:
-        items.append(make_item("Frequency shown",
-                               ("info", "frequency"),
-                               frequency, "unknown"))
+    if frequency in {"yes", "no"}:
+        _append(items, "Frequency shown", ("info", "frequency"), frequency, "unknown")
     else:
-        items.append(make_item("Frequency shown",
-                               ("info", "frequency"),
-                               frequency, "unknown",
-                               "Frequency information not clear."))
+        _append(items, "Frequency shown", ("info", "frequency"), frequency, "unknown", "Frequency information not clear.")
 
-    # SEMANTIC TYPE
-    semantic = info.get("semantic_type")
-    if semantic and isinstance(semantic, str) and semantic.strip():
-        items.append(make_item("Semantic type",
-                               ("info", "semantic_type"),
-                               semantic, "good"))
+    semantic_type = info.get("semantic_type")
+    if isinstance(semantic_type, str) and semantic_type.strip():
+        _append(items, "Semantic type", ("info", "semantic_type"), semantic_type, "good")
     else:
-        items.append(make_item("Semantic type",
-                               ("info", "semantic_type"),
-                               semantic, "bad",
-                               "What the data represents is unclear."))
+        _append(
+            items,
+            "Semantic type",
+            ("info", "semantic_type"),
+            semantic_type,
+            "bad",
+            "What the data represents is unclear.",
+        )
 
-    # BACKGROUND COLOUR
-    bg = info.get("bgcolour")
-    if bg:
-        items.append(make_item("Background colour",
-                               ("info", "bgcolour"),
-                               bg, "unknown"))
+    background_colour = info.get("bgcolour")
+    if background_colour:
+        _append(items, "Background colour", ("info", "bgcolour"), background_colour, "unknown")
     else:
-        items.append(make_item("Background colour",
-                               ("info", "bgcolour"),
-                               bg, "unknown",
-                               "Background colour not identified."))
+        _append(
+            items,
+            "Background colour",
+            ("info", "bgcolour"),
+            background_colour,
+            "unknown",
+            "Background colour not identified.",
+        )
 
-    # CLASSIFICATION
     classification = info.get("classification")
-    if classification in [
-        "Equal Interval", "Pretty Breaks", "Geometric", "Exponential",
-        "Quantile", "Percentile", "Standard Deviation", "Maximum Breaks",
-        "Unclassed", "Manual Intervals",
-    ]:
-        items.append(make_item("Classification method",
-                               ("info", "classification"),
-                               classification, "good"))
+    if classification in CLASSIFICATION_METHODS:
+        _append(items, "Classification method", ("info", "classification"), classification, "neutral")
     else:
-        items.append(make_item("Classification method",
-                               ("info", "classification"),
-                               classification, "bad",
-                               "Classification method unclear."))
+        _append(
+            items,
+            "Classification method",
+            ("info", "classification"),
+            classification or "Manual Interval",
+            "neutral",
+            "Classification method unclear.",
+        )
 
     return items

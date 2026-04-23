@@ -1,47 +1,93 @@
+import time
+
 import streamlit as st
 
+from ui.components.scripts import inject_panel_height_js
+from ui.components.styles import inject_base_css, inject_global_padding
+from ui.sections.criteria import build_criteria_items, render_details_panel
+from ui.sections.diagram import render_binning_details
 from ui.sections.evaluation import render_evaluation
-from ui.sections.criteria import build_criteria_items, render_details
-from ui.components.styles import inject_global_padding, inject_base_css
-from ui.components.scripts import (
-    inject_panel_height_js,
-    inject_left_scroll_to_js,
-    inject_right_scroll_to_js,
-)
-from utils.json_utils import try_parse_json_text
-from ui.sections.upload_map import render_upload_map
+from ui.sections.start_analysis_sync import start_analysis_sync, sync_analysis_state
 from ui.sections.upload_data import render_data_section
-from ui.sections.start_analysis_sync import start_analysis_sync
+from ui.sections.upload_map import render_upload_map
+from utils.json_utils import try_parse_json_text
 
 BACKEND_BASE = "http://127.0.0.1:5000"
+LEFT_PANEL_HEIGHT = 500
+RIGHT_PANEL_HEIGHT = 525
+SESSION_DEFAULTS = {
+    "analysis_status": "idle",  # idle | running | done | error
+    "analysis_result": None,
+    "analysis_error": None,
+    "analysis_started_at": None,
+    "analysis_duration_s": None,
+    "analysis_future": None,
+    "analysis_request_id": None,
+    "backend_image_id": None,
+    "map_bytes": None,
+    "map_name": None,
+    "map_sig": None,
+    "data_bytes": None,
+    "data_name": None,
+    "data_sig": None,
+    "target_user": "",
+    "map_purpose": "",
+    "csv_df": None,
+    "selected_column": None,
+    "is_numeric_column": None,
+    "binning_similarity": None,
+    "left_tab": "Map",
+    "right_tab": "Evaluation",
+}
+TITLE_HTML = """
+<div class="top-title-wrap">
+  <div class="top-title">Fixopleth</div>
+</div>
+"""
+IDLE_PLACEHOLDER_HTML = (
+    '<div class="right-placeholder">'
+    '<div class="placeholder-guide">'
+    '<div class="placeholder-title">How To Start</div>'
+    '<div class="placeholder-step"><span class="step-label">Step 1</span> Upload a map in the <b>Map</b> tab.</div>'
+    '<div class="placeholder-step"><span class="step-label">Step 2</span> Optionally add <b>Data</b> and <b>Context</b>.</div>'
+    '<div class="placeholder-step"><span class="step-label">Step 3</span> Click <span class="placeholder-action">Analyze</span> to see the results!</div>'
+    "</div>"
+    "</div>"
+)
+RUNNING_STATE_HTML = (
+    '<div class="running-state">'
+    '<div class="running-badge">Running</div>'
+    '<div class="running-title">Analyzing your map...</div>'
+    '<div class="running-steps">'
+    '<div class="running-step">1. Reading map content</div>'
+    '<div class="running-step">2. Extracting legend and binning information</div>'
+    '<div class="running-step">3. Building the right-side results view</div>'
+    "</div>"
+    "</div>"
+)
 
-st.set_page_config(page_title="Map Analysis", layout="wide")
+st.set_page_config(
+    page_title="Fixopleth",
+    layout="wide",
+    menu_items={"Get Help": None, "Report a bug": None, "About": None},
+)
 
 
 def init_state():
-    defaults = {
-        "analysis_status": "idle",
-        "analysis_result": None,
-        "analysis_error": None,
-        "analysis_started_at": None,
-        "analysis_duration_s": None,
-        "backend_image_id": None,
-        "map_bytes": None,
-        "map_name": None,
-        "map_sig": None,
-        "data_bytes": None,
-        "data_name": None,
-        "enable_data_upload": False,
-        "target_user": "",
-        "map_purpose": "",
-        "csv_df": None,
-        "selected_column": None,
-        "is_numeric_column": None,
-        "binning_similarity": None,
-    }
-    for key, value in defaults.items():
+    for key, value in SESSION_DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+def unwrap_analysis_json(data):
+    if not isinstance(data, dict):
+        return data
+
+    wrapped = data.get("choropleth_map_evaluation")
+    if isinstance(wrapped, dict):
+        return wrapped
+
+    return data
 
 
 def try_parse_result_and_show(result: dict):
@@ -61,88 +107,119 @@ def try_parse_result_and_show(result: dict):
         st.json(result)
 
 
-def unwrap_analysis_json(data):
-    if not isinstance(data, dict):
-        return data
+def render_left_panel(content_renderer) -> None:
+    with st.container(height=LEFT_PANEL_HEIGHT, border=False):
+        st.markdown('<span class="panel-marker left-panel-marker"></span>', unsafe_allow_html=True)
+        st.markdown('<div class="left-inner-pad">', unsafe_allow_html=True)
+        content_renderer()
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    wrapped = data.get("choropleth_map_evaluation")
-    if isinstance(wrapped, dict):
-        return wrapped
 
-    return data
+def render_context_section() -> None:
+    st.markdown('<div class="section-label">CONTEXT</div>', unsafe_allow_html=True)
+    st.text_input(
+        "Target User",
+        key="target_user",
+        placeholder="e.g. General public, Urban planners",
+    )
+    st.text_input(
+        "Map Purpose",
+        key="map_purpose",
+        placeholder="e.g. Show population density",
+    )
+
+
+def get_analysis_json(status: str, result: dict | None):
+    if status != "done" or not isinstance(result, dict) or "analysis" not in result:
+        return None
+
+    analysis_raw = result.get("analysis")
+    if isinstance(analysis_raw, dict):
+        return unwrap_analysis_json(analysis_raw)
+
+    parsed = try_parse_json_text(analysis_raw or "")
+    if isinstance(parsed, dict):
+        return unwrap_analysis_json(parsed)
+
+    return None
+
+
+def render_right_result_panel(analysis_json: dict, items: list[dict]) -> None:
+    overview_tab, details_tab = st.tabs(["Overview", "Details"])
+
+    with overview_tab:
+        with st.container(height=RIGHT_PANEL_HEIGHT, border=False):
+            st.markdown('<span class="panel-marker right-panel-marker"></span>', unsafe_allow_html=True)
+            render_evaluation(analysis_json, items)
+
+    with details_tab:
+        with st.container(height=RIGHT_PANEL_HEIGHT, border=False):
+            st.markdown('<span class="panel-marker right-panel-marker"></span>', unsafe_allow_html=True)
+            detail_tabs = render_details_panel(analysis_json, items=items)
+            if detail_tabs is not None:
+                binning_tab, _ = detail_tabs
+                with binning_tab:
+                    render_binning_details(analysis_json)
+
+
+def render_right_fallback_panel(status: str, result: dict | None, err: str | None) -> None:
+    with st.container(height=RIGHT_PANEL_HEIGHT, border=False):
+        st.markdown('<span class="panel-marker right-panel-marker"></span>', unsafe_allow_html=True)
+
+        if status == "idle":
+            st.markdown(IDLE_PLACEHOLDER_HTML, unsafe_allow_html=True)
+        elif status == "running":
+            st.markdown(RUNNING_STATE_HTML, unsafe_allow_html=True)
+        elif status == "error":
+            st.error(f"Analysis failed: {err or 'unknown error'}")
+            st.caption(f"Make sure Flask backend is running at {BACKEND_BASE}")
+        elif status == "done":
+            st.caption("AI output is not valid JSON. Showing raw response.")
+            if result is not None:
+                try_parse_result_and_show(result)
+        else:
+            st.warning(f"Unknown analysis_status: {status}")
 
 
 init_state()
-
-inject_global_padding(padding_top_rem=0.08, padding_bottom_rem=0.0)
+sync_analysis_state()
+inject_global_padding(padding_top_rem=0.0, padding_bottom_rem=0.0)
 inject_base_css()
 inject_panel_height_js()
-
-st.markdown(
-    """
-    <div class="top-title-wrap">
-    <div class="top-title">How to NOT Lie With Map</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown(TITLE_HTML, unsafe_allow_html=True)
 
 left_col, right_col = st.columns([4, 6], gap="medium")
 
 with left_col:
     st.markdown('<span class="col-marker left-col-marker"></span>', unsafe_allow_html=True)
+    running = st.session_state.get("analysis_status") == "running"
 
-    st.markdown(
-        """
-        <div class="left-sticky-headers" id="leftStickyHdr">
-          <div class="hdr-row">
-            <button type="button" data-target="sec-map">Map <span class="req-star">*</span></button>
-            <button type="button" data-target="sec-data">Data</button>
-            <button type="button" data-target="sec-context">Context</button>
-          </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    map_tab, data_tab, context_tab = st.tabs(["Map", "Data", "Context"])
 
-    with st.container(height=450, border=False):
-        st.markdown('<span class="panel-marker left-panel-marker"></span>', unsafe_allow_html=True)
-        st.markdown('<div class="left-inner-pad" id="leftInnerPad">', unsafe_allow_html=True)
+    with map_tab:
+        render_left_panel(lambda: render_upload_map(preview_box=280))
 
-        st.markdown('<div id="sec-map" class="section-anchor"></div>', unsafe_allow_html=True)
-        render_upload_map(preview_box=280)
+    with data_tab:
+        render_left_panel(render_data_section)
 
-        st.markdown('<div id="sec-data" class="section-anchor"></div>', unsafe_allow_html=True)
-        render_data_section()
-
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown('<div id="sec-context" class="section-anchor"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-label">CONTEXT</div>', unsafe_allow_html=True)
-        st.text_input(
-            "Target User",
-            key="target_user",
-            placeholder="e.g. General public, urban planners",
-        )
-        st.text_input(
-            "Map Purpose",
-            key="map_purpose",
-            placeholder="e.g. Show population density",
-        )
-
-        st.markdown("</div>", unsafe_allow_html=True)
-        inject_left_scroll_to_js()
-        st.markdown("</div>", unsafe_allow_html=True)
+    with context_tab:
+        render_left_panel(render_context_section)
 
     has_map = bool(st.session_state.get("map_bytes"))
-    running = st.session_state.get("analysis_status") == "running"
     btn_label = "Running..." if running else "Analyze"
-    clicked = st.button(btn_label, disabled=(not has_map) or running, use_container_width=True, type="primary")
+    clicked = st.button(
+        btn_label,
+        disabled=(not has_map) or running,
+        use_container_width=True,
+        type="primary",
+    )
+    st.markdown('<div class="left-analyze-spacer"></div>', unsafe_allow_html=True)
 
     if clicked:
         try:
             start_analysis_sync()
-        except Exception as exc:
-            st.session_state["analysis_error"] = str(exc)
+        except Exception as e:
+            st.session_state["analysis_error"] = str(e)
             st.session_state["analysis_status"] = "error"
         st.rerun()
 
@@ -152,72 +229,14 @@ with right_col:
     status = st.session_state.get("analysis_status", "idle")
     result = st.session_state.get("analysis_result")
     err = st.session_state.get("analysis_error")
+    analysis_json = get_analysis_json(status, result)
 
-    analysis_json = None
-    if status == "done" and isinstance(result, dict) and "analysis" in result:
-        analysis_raw = result.get("analysis")
-        if isinstance(analysis_raw, dict):
-            analysis_json = unwrap_analysis_json(analysis_raw)
-        else:
-            parsed = try_parse_json_text(analysis_raw or "")
-            if isinstance(parsed, dict):
-                analysis_json = unwrap_analysis_json(parsed)
+    if analysis_json is not None:
+        items, _ = build_criteria_items(analysis_json)
+        render_right_result_panel(analysis_json, items)
+    else:
+        render_right_fallback_panel(status, result, err)
 
-    show_right_header = analysis_json is not None
-
-    if show_right_header:
-        st.markdown(
-            """
-            <div class="right-fixed-headers two-tabs" id="rightFixedHdr">
-              <div class="hdr-row">
-                <button type="button" data-target="r-sec-overview">Overview</button>
-                <button type="button" data-target="r-sec-details">Details</button>
-              </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with st.container(height=500, border=False):
-        st.markdown('<span class="panel-marker right-panel-marker"></span>', unsafe_allow_html=True)
-
-        if status == "idle":
-            st.markdown(
-                '<div class="right-placeholder">'
-                'Upload a map and click <b>Analyze</b> to see results.'
-                "</div>",
-                unsafe_allow_html=True,
-            )
-        elif status == "running":
-            st.info("Running analysis...")
-        elif status == "error":
-            st.error(f"Analysis failed: {err or 'unknown error'}")
-            st.caption(f"Make sure Flask backend is running at {BACKEND_BASE}")
-        elif status == "done":
-            if result is None:
-                st.warning("Analysis finished, but no results were produced.")
-            else:
-                backend_status = result.get("status", "unknown") if isinstance(result, dict) else "unknown"
-                if backend_status == "success":
-                    st.success("Analysis complete.")
-                else:
-                    st.warning("Backend returned a non-success response.")
-
-            if analysis_json is None:
-                st.caption("AI output is not valid JSON. Showing raw response.")
-                if result is not None:
-                    try_parse_result_and_show(result)
-            else:
-                items, item_by_id = build_criteria_items(analysis_json)
-
-                st.markdown('<div id="r-sec-overview" class="right-section-anchor"></div>', unsafe_allow_html=True)
-                render_evaluation(analysis_json, item_by_id)
-
-                st.markdown("<hr>", unsafe_allow_html=True)
-                st.markdown('<div id="r-sec-details" class="right-section-anchor"></div>', unsafe_allow_html=True)
-                render_details(analysis_json, items=items)
-        else:
-            st.warning(f"Unknown analysis_status: {status}")
-
-        if show_right_header:
-            inject_right_scroll_to_js()
+if st.session_state.get("analysis_status") == "running":
+    time.sleep(1)
+    st.rerun()

@@ -154,9 +154,9 @@ def draw_binning_diagram_plotly(
     tickvals, ticktext = _format_ticks_from_edges(edges, precision=tick_precision)
 
     fig.update_layout(
-        title=dict(text=title_text, x=0.0, xanchor="left"),
+        title=dict(text=(title_text or ""), x=0.0, xanchor="left"),
         height=height,
-        margin=dict(l=25, r=20, t=54, b=44),
+        margin=dict(l=18, r=10, t=(38 if title_text else 10), b=2),
         barmode="overlay",
         hovermode="closest",
         hoverlabel=dict(namelength=0),
@@ -215,15 +215,19 @@ def _extract_classification_method(analysis_json: dict) -> str:
 
 
 def _extract_binning_inputs(analysis_json: dict):
+    data_bytes = st.session_state.get("data_bytes")
     csv_df = st.session_state.get("csv_df")
     selected_column = st.session_state.get("selected_column")
     is_numeric_col = st.session_state.get("is_numeric_column", None)
 
-    if (csv_df is None) or (selected_column is None):
+    if (not data_bytes) or (csv_df is None) or (selected_column is None):
         return None, None, None, "Upload CSV and choose a data column to see binning results."
 
     if not is_numeric_col:
         return None, None, None, "The selected data column is categorical, so binning comparison is unavailable."
+
+    if selected_column not in csv_df.columns:
+        return None, None, None, "The selected data column is no longer available. Please reselect a CSV column."
 
     col_series = csv_df[selected_column]
     data = pd.to_numeric(col_series, errors="coerce").dropna().to_numpy()
@@ -352,6 +356,12 @@ def _format_edge_list(edges) -> str:
     return ", ".join(f"{float(edge):.2f}".rstrip("0").rstrip(".") for edge in edges)
 
 
+def _format_method_label(name: str, similarity: float | None) -> str:
+    if similarity is None:
+        return name
+    return f"{name} (Similarity: {similarity * 100:.1f}%)"
+
+
 def render_similarity_explainer(manual_edges, auto_edges, similarity: float | None):
     st.markdown(
         "Similarity is based on how close each generated bin width is to the uploaded map's bin width."
@@ -360,10 +370,38 @@ def render_similarity_explainer(manual_edges, auto_edges, similarity: float | No
         st.write("This method did not produce a valid similarity score.")
         return
 
+    manual_edges = np.asarray(manual_edges, dtype=float)
+    auto_edges = np.asarray(auto_edges, dtype=float)
+    manual_widths = np.diff(manual_edges)
+    auto_widths = np.diff(auto_edges)
+    comparable_count = min(len(manual_widths), len(auto_widths))
+    width_diffs = np.abs(manual_widths[:comparable_count] - auto_widths[:comparable_count])
+    avg_width_error = float(np.mean(width_diffs)) if comparable_count else None
+
+    st.markdown("**Step 1. Extract the bin edges from the uploaded map and the candidate method.**")
+    st.markdown(f"Uploaded map edges: `{_format_edge_list(manual_edges)}`")
+    st.markdown(f"Method edges: `{_format_edge_list(auto_edges)}`")
+
+    st.markdown("**Step 2. Convert edges into bin widths.**")
+    st.markdown(f"Uploaded bin widths: `{_format_edge_list(manual_widths)}`")
+    st.markdown(f"Method bin widths: `{_format_edge_list(auto_widths)}`")
+
+    st.markdown("**Step 3. Compare each corresponding bin width.**")
+    if comparable_count:
+        st.markdown(f"Absolute width differences: `{_format_edge_list(width_diffs)}`")
+    if avg_width_error is not None:
+        st.markdown(f"Average width error = `mean({_format_edge_list(width_diffs)}) = {avg_width_error:.2f}`")
+
+    st.markdown("**Step 4. Apply the similarity formula.**")
     st.code("similarity = 1 / (1 + average_width_error / 100)", language="text")
-    st.write(f"Uploaded map edges: {_format_edge_list(manual_edges)}")
-    st.write(f"Method edges: {_format_edge_list(auto_edges)}")
-    st.write(f"Similarity score: {similarity * 100:.1f}%")
+    if avg_width_error is not None:
+        st.code(
+            f"similarity = 1 / (1 + {avg_width_error:.2f} / 100)\n"
+            f"similarity = {similarity:.4f}\n"
+            f"similarity = {similarity * 100:.1f}%",
+            language="text",
+        )
+    st.markdown(f"**Final similarity score:** {similarity * 100:.1f}%")
 
 
 def render_binning_method_rankings(diagnostics: dict, container_height: int = 340, chart_height: int = 150):
@@ -373,59 +411,56 @@ def render_binning_method_rankings(diagnostics: dict, container_height: int = 34
         return
 
     with st.container(height=container_height, border=False):
-        for record in method_records_sorted:
-            st.markdown(f"**{record['name']}**")
+        for index, record in enumerate(method_records_sorted):
             if record.get("error"):
                 st.caption(f"Could not compute this method: {record['error']}")
                 st.markdown("<hr>", unsafe_allow_html=True)
                 continue
 
-            similarity = record.get("similarity")
-            if similarity is None:
-                st.caption("Similarity unavailable")
-            else:
-                st.caption(f"Similarity score: {similarity * 100:.1f}%")
-
+            st.markdown(
+                f'<div class="binning-method-name">{_format_method_label(record["name"], record.get("similarity"))}</div>',
+                unsafe_allow_html=True,
+            )
             draw_binning_diagram_plotly(
                 record["edges"],
                 method_name=record["name"],
-                similarity=similarity,
+                similarity=record.get("similarity"),
                 data=diagnostics["data"],
                 tick_precision=2,
                 height=chart_height,
+                title_text="",
             )
 
-            with st.expander("Show similarity"):
+            with st.expander("Show calculation"):
                 render_similarity_explainer(
                     diagnostics["manual_edges"],
                     record["edges"],
-                    similarity,
+                    record.get("similarity"),
                 )
+            if index < len(method_records_sorted) - 1:
+                st.markdown('<div class="binning-method-divider"></div>', unsafe_allow_html=True)
 
-            st.markdown("<hr>", unsafe_allow_html=True)
 
-
-def render_binning_overview(analysis_json: dict):
+def render_binning_details(analysis_json: dict):
     diagnostics = build_binning_diagnostics(analysis_json)
     if diagnostics.get("error"):
         st.info(diagnostics["error"])
         return
 
-    st.subheader("Overview")
-    st.markdown("#### The uploaded map is binned as:")
-    st.write(diagnostics["classification_method"])
+    st.markdown('<div class="binning-heading uploaded-heading">The uploaded map is binned as:</div>', unsafe_allow_html=True)
     draw_binning_diagram_plotly(
         diagnostics["manual_edges"],
         method_name="Uploaded map",
         similarity=None,
         data=diagnostics["data"],
         tick_precision=2,
-        height=220,
-        title_text="Uploaded map binning",
+        height=144,
+        title_text="",
     )
-
-    st.markdown("#### This binning method is similar to")
-    render_binning_method_rankings(diagnostics, container_height=360, chart_height=145)
+    st.markdown('<div class="binning-gap-collapser"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="binning-heading tight-top larger">Other similar binning methods include...</div>', unsafe_allow_html=True)
+    st.markdown('<div class="binning-method-list-top"></div>', unsafe_allow_html=True)
+    render_binning_method_rankings(diagnostics, container_height=360, chart_height=138)
 
 
 def render_classification_diagram(analysis_json: dict):

@@ -21,10 +21,21 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-# Config
 UPLOAD_FOLDER = "uploads/maps"
 DATA_FOLDER = "uploads/data"
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "csv"}
+FILE_STORAGE = {
+    "csv": {
+        "config_key": "DATA_FOLDER",
+        "url_prefix": "/uploads/data",
+        "collection_name": "map_data",
+    },
+    "default": {
+        "config_key": "UPLOAD_FOLDER",
+        "url_prefix": "/uploads/maps",
+        "collection_name": "map_images",
+    },
+}
 
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["DATA_FOLDER"] = DATA_FOLDER
@@ -48,7 +59,7 @@ def allowed_file(filename: str) -> bool:
 def now_utc():
     return datetime.utcnow()
 
-# MongoDb Connection
+
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
@@ -60,6 +71,7 @@ db = client["MapAuditDB"]
 results_collection = db["analysis_results"]
 images_collection = db["map_images"]
 data_collection = db["map_data"]
+FILE_COLLECTIONS = (images_collection, data_collection)
 
 
 PROMPT_PATH = os.getenv("PROMPT_PATH", "prompt.txt")
@@ -72,11 +84,8 @@ def load_prompt_template() -> str:
     return p.read_text(encoding="utf-8").strip()
 
 
-PROMPT_TEMPLATE = load_prompt_template()
-
-
 def build_prompt(audience: str, purpose: str, distribution: str) -> str:
-    template = load_prompt_template()  # reload every time
+    template = load_prompt_template()
     return (
         template
         .replace("{{audience}}", str(audience or "unknown"))
@@ -97,6 +106,27 @@ def read_image_path_from_db(image_id: str) -> tuple[str, str]:
 
     original_name = str(img.get("original_name") or os.path.basename(image_path))
     return image_path, original_name
+
+
+def _parse_object_id(raw_id: str) -> ObjectId:
+    try:
+        return ObjectId(raw_id)
+    except Exception as exc:
+        raise ValueError("invalid image_id") from exc
+
+
+def _get_storage_spec(filename: str) -> dict[str, str]:
+    ext = filename.rsplit(".", 1)[1].lower()
+    return FILE_STORAGE.get(ext, FILE_STORAGE["default"])
+
+
+def _find_file_record(file_id: str) -> tuple[dict | None, Any | None]:
+    oid = ObjectId(file_id)
+    for collection in FILE_COLLECTIONS:
+        record = collection.find_one({"_id": oid})
+        if record:
+            return record, collection
+    return None, None
 
 
 def _guess_mime_from_path(image_path: str) -> str:
@@ -412,6 +442,94 @@ def _call_model(
     return response.choices[0].message.content
 
 
+def _build_failure_result(
+    *,
+    trace_id: str,
+    image_id: str,
+    image_path: str,
+    audience: str,
+    purpose: str,
+    distribution: str,
+    model_candidates: list[str],
+    image_meta: dict,
+    last_error: Exception | None,
+    analysis_raw: str | None,
+    started_at: float,
+) -> dict:
+    error_message = str(last_error) if last_error else "All model attempts failed."
+    results_collection.insert_one(
+        {
+            "trace_id": trace_id,
+            "image_id": image_id,
+            "analysis_raw": analysis_raw,
+            "parse_error": error_message,
+            "created_at": now_utc(),
+            "audience": audience,
+            "purpose": purpose,
+            "distribution": distribution,
+            "model_candidates": model_candidates,
+            "image_meta": image_meta,
+            "elapsed_s": round(time.time() - started_at, 3),
+            "status": "model_failed",
+        }
+    )
+    return {
+        "status": "error",
+        "error": error_message,
+        "trace_id": trace_id,
+        "image_path": image_path,
+        "model_candidates": model_candidates,
+    }
+
+
+def _build_success_result(
+    *,
+    trace_id: str,
+    image_id: str,
+    image_path: str,
+    original_name: str,
+    audience: str,
+    purpose: str,
+    distribution: str,
+    model_candidates: list[str],
+    model_used: str,
+    image_meta: dict,
+    analysis_raw: str,
+    analysis_json: dict,
+    started_at: float,
+) -> dict:
+    results_collection.insert_one(
+        {
+            "trace_id": trace_id,
+            "image_id": image_id,
+            "analysis": analysis_json,
+            "analysis_raw": analysis_raw,
+            "created_at": now_utc(),
+            "audience": audience,
+            "purpose": purpose,
+            "distribution": distribution,
+            "model": model_used,
+            "model_candidates": model_candidates,
+            "image_path": image_path,
+            "image_name": original_name,
+            "image_meta": image_meta,
+            "elapsed_s": round(time.time() - started_at, 3),
+            "status": "ok",
+        }
+    )
+    return {
+        "status": "success",
+        "trace_id": trace_id,
+        "analysis": analysis_json,
+        "analysis_raw": analysis_raw,
+        "model_used": model_used,
+        "model_candidates": model_candidates,
+        "image_path": image_path,
+        "image_name": original_name,
+        "image_meta": image_meta,
+    }
+
+
 def _repair_to_json(or_client: OpenRouter, model: str, raw_text: str, trace_id: str) -> str:
     # ask model to output ONLY valid JSON for the previous output.
     repair_prompt = (
@@ -501,66 +619,40 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
                 logging.warning("[%s] model=%s failed, trying next fallback (%s)", trace_id, model_name, exc)
 
     if analysis_json is None or model_used is None or analysis_raw is None:
-        results_collection.insert_one(
-            {
-                "trace_id": trace_id,
-                "image_id": image_id,
-                "analysis_raw": analysis_raw,
-                "parse_error": str(last_error) if last_error else "Unknown model failure",
-                "created_at": now_utc(),
-                "audience": audience,
-                "purpose": purpose,
-                "distribution": distribution,
-                "model_candidates": model_candidates,
-                "image_meta": image_meta,
-                "elapsed_s": round(time.time() - t0, 3),
-                "status": "model_failed",
-            }
+        return _build_failure_result(
+            trace_id=trace_id,
+            image_id=image_id,
+            image_path=image_path,
+            audience=audience,
+            purpose=purpose,
+            distribution=distribution,
+            model_candidates=model_candidates,
+            image_meta=image_meta,
+            last_error=last_error,
+            analysis_raw=analysis_raw,
+            started_at=t0,
         )
-        return {
-            "status": "error",
-            "error": str(last_error) if last_error else "All model attempts failed.",
-            "trace_id": trace_id,
-            "image_path": image_path,
-            "model_candidates": model_candidates,
-        }
 
     analysis_json = _unwrap_analysis_json(analysis_json)
     analysis_json = normalize_analysis(analysis_json)
 
     logging.info("[%s] model=%s returned and parsed in %.2fs", trace_id, model_used, time.time() - t0)
 
-    results_collection.insert_one(
-        {
-            "trace_id": trace_id,
-            "image_id": image_id,
-            "analysis": analysis_json,          # structured JSON
-            "analysis_raw": analysis_raw,       
-            "created_at": now_utc(),
-            "audience": audience,
-            "purpose": purpose,
-            "distribution": distribution,
-            "model": model_used,
-            "model_candidates": model_candidates,
-            "image_path": image_path,
-            "image_name": original_name,
-            "image_meta": image_meta,
-            "elapsed_s": round(time.time() - t0, 3),
-            "status": "ok",
-        }
+    return _build_success_result(
+        trace_id=trace_id,
+        image_id=image_id,
+        image_path=image_path,
+        original_name=original_name,
+        audience=audience,
+        purpose=purpose,
+        distribution=distribution,
+        model_candidates=model_candidates,
+        model_used=model_used,
+        image_meta=image_meta,
+        analysis_raw=analysis_raw,
+        analysis_json=analysis_json,
+        started_at=t0,
     )
-
-    return {
-        "status": "success",
-        "trace_id": trace_id,
-        "analysis": analysis_json,
-        "analysis_raw": analysis_raw,
-        "model_used": model_used,
-        "model_candidates": model_candidates,
-        "image_path": image_path,
-        "image_name": original_name,
-        "image_meta": image_meta,
-    }
 
 
 # ===========
@@ -580,18 +672,10 @@ def upload_image():
             return jsonify({"status": "error", "message": "Invalid file type"}), 400
 
         filename = secure_filename(file.filename)
-
-        # Separate folders for CSV vs images
-        if filename.lower().endswith(".csv"):
-            save_dir = app.config["DATA_FOLDER"]
-            url_path = f"/uploads/data/{filename}"
-            target_collection = data_collection
-            id_field = "image_id"
-        else:
-            save_dir = app.config["UPLOAD_FOLDER"]
-            url_path = f"/uploads/maps/{filename}"
-            target_collection = images_collection
-            id_field = "image_id"
+        storage_spec = _get_storage_spec(filename)
+        save_dir = app.config[storage_spec["config_key"]]
+        url_path = f'{storage_spec["url_prefix"]}/{filename}'
+        target_collection = db[storage_spec["collection_name"]]
 
         save_path = os.path.join(save_dir, filename)
         file.save(save_path)
@@ -599,7 +683,7 @@ def upload_image():
         doc = {"original_name": file.filename, "url": url_path, "created_at": now_utc()}
         inserted_id = target_collection.insert_one(doc).inserted_id
 
-        return jsonify({"status": "success", id_field: str(inserted_id), "url": doc["url"]}), 200
+        return jsonify({"status": "success", "image_id": str(inserted_id), "url": doc["url"]}), 200
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -608,7 +692,9 @@ def upload_image():
 @app.route("/readImage", methods=["GET"])
 def read_images():
     try:
-        images = list(images_collection.find()) + list(data_collection.find())
+        images = []
+        for collection in FILE_COLLECTIONS:
+            images.extend(collection.find())
         for img in images:
             img["_id"] = str(img["_id"])
         return jsonify({"status": "success", "data": images}), 200
@@ -619,10 +705,7 @@ def read_images():
 @app.route("/deleteImage/<image_id>", methods=["DELETE"])
 def delete_image(image_id):
     try:
-        img_data = images_collection.find_one({"_id": ObjectId(image_id)}) or data_collection.find_one(
-            {"_id": ObjectId(image_id)}
-        )
-
+        img_data, target_collection = _find_file_record(image_id)
         if not img_data:
             return jsonify({"status": "error", "message": "Image not found in database"}), 404
 
@@ -630,10 +713,7 @@ def delete_image(image_id):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-        result = images_collection.delete_one({"_id": ObjectId(image_id)})
-        if result.deleted_count == 0:
-            result = data_collection.delete_one({"_id": ObjectId(image_id)})
-
+        result = target_collection.delete_one({"_id": img_data["_id"]})
         if result.deleted_count > 0:
             return jsonify({"status": "success", "message": "database record deleted successfully"}), 200
 
@@ -669,9 +749,9 @@ def analyze_sync():
             return jsonify({"status": "error", "error": "image_id is required"}), 400
 
         try:
-            oid = ObjectId(image_id)
-        except Exception:
-            return jsonify({"status": "error", "error": "invalid image_id"}), 400
+            oid = _parse_object_id(image_id)
+        except ValueError as exc:
+            return jsonify({"status": "error", "error": str(exc)}), 400
 
         if not images_collection.find_one({"_id": oid}):
             return jsonify({"status": "error", "error": "image not found"}), 404

@@ -1,6 +1,24 @@
 import io
+
 import streamlit as st
 from PIL import Image
+
+from ui.sections.start_analysis_sync import reset_analysis_state
+
+
+def _store_uploaded_map(map_file) -> None:
+    new_bytes = map_file.getvalue()
+    new_name = map_file.name
+    new_sig = (new_name, len(new_bytes))
+    prev_sig = st.session_state.get("map_sig")
+
+    st.session_state["map_bytes"] = new_bytes
+    st.session_state["map_name"] = new_name
+
+    if prev_sig != new_sig:
+        st.session_state["map_sig"] = new_sig
+        st.session_state["backend_image_id"] = None
+        reset_analysis_state()
 
 
 def render_upload_map(preview_box: int = 280):
@@ -14,22 +32,7 @@ def render_upload_map(preview_box: int = 280):
     )
 
     if map_file is not None:
-        new_bytes = map_file.getvalue()
-        new_name = map_file.name
-        new_sig = (new_name, len(new_bytes))
-        prev_sig = st.session_state.get("map_sig")
-
-        st.session_state["map_bytes"] = new_bytes
-        st.session_state["map_name"] = new_name
-
-        if prev_sig != new_sig:
-            st.session_state["map_sig"] = new_sig
-            st.session_state["backend_image_id"] = None
-            st.session_state["analysis_status"] = "idle"
-            st.session_state["analysis_result"] = None
-            st.session_state["analysis_error"] = None
-            st.session_state["analysis_started_at"] = None
-            st.session_state["analysis_duration_s"] = None
+        _store_uploaded_map(map_file)
 
     map_bytes = st.session_state.get("map_bytes")
     map_name = st.session_state.get("map_name", "Uploaded map")
