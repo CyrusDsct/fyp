@@ -169,15 +169,9 @@ def bin_similarity_2d(manual_meta, auto_meta):
 
 def interval_similarity(manual_edges, auto_edges):
     """
-    Dashboard expects similarity in [0,1], higher is better.
-
-    Your existing functions return average %error (lower is better).
-    We convert:
-        similarity = 1 / (1 + avg_error/100)
-    so:
-        avg_error=0% -> 1.0
-        avg_error=100% -> 0.5
-        avg_error=300% -> 0.25
+    Compare normalized edge positions and bin widths.
+    This penalizes methods whose bins have similar widths but are shifted to
+    the wrong part of the range.
     """
     try:
         m = np.array(manual_edges, dtype=float)
@@ -195,16 +189,38 @@ def interval_similarity(manual_edges, auto_edges):
         if m.size < 2 or a.size < 2:
             return None
 
-        manual_ranges = [[m[i], m[i + 1]] for i in range(len(m) - 1)]
-        auto_ranges = [[a[i], a[i + 1]] for i in range(len(a) - 1)]
-
-        avg_error = bin_similarity_1d_range(manual_ranges, auto_ranges)  # percent error
-        if avg_error is None:
+        m_range = float(m[-1] - m[0])
+        a_range = float(a[-1] - a[0])
+        if m_range <= 0 or a_range <= 0:
             return None
 
-        # convert percent error (lower better) to similarity (higher better)
-        sim = 1.0 / (1.0 + (float(avg_error) / 100.0))
-        return float(sim)
+        m_norm = (m - m[0]) / m_range
+        a_norm = (a - a[0]) / a_range
+
+        manual_widths = np.diff(m_norm)
+        auto_widths = np.diff(a_norm)
+        comparable_bins = min(len(manual_widths), len(auto_widths))
+        if comparable_bins == 0:
+            return None
+
+        width_error = float(np.mean(np.abs(manual_widths[:comparable_bins] - auto_widths[:comparable_bins])))
+
+        manual_internal = m_norm[1:-1]
+        auto_internal = a_norm[1:-1]
+        comparable_edges = min(len(manual_internal), len(auto_internal))
+        edge_error = (
+            float(np.mean(np.abs(manual_internal[:comparable_edges] - auto_internal[:comparable_edges])))
+            if comparable_edges
+            else 0.0
+        )
+
+        bin_count_penalty = 1.0 - (abs(len(manual_widths) - len(auto_widths)) / max(len(manual_widths), len(auto_widths), 1))
+        combined_error = (0.65 * edge_error) + (0.35 * width_error)
+        similarity = max(0.0, 1.0 - combined_error) * max(0.0, bin_count_penalty)
+        if not np.isfinite(similarity):
+            return None
+
+        return float(similarity)
 
     except Exception:
         return None

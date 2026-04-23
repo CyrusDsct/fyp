@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 try:
@@ -26,6 +28,26 @@ def _require_mapclassify():
     if mapclassify is None:
         raise ImportError("mapclassify is required for this binning method. Install requirements.txt.")
     return mapclassify
+
+
+def _run_with_known_binning_warning_suppressed(factory):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Not enough unique values in array to form .* classes\. Setting k to .*",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Insufficient number of unique diffs\. Breaks are random\.",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Numba not installed\. Using slow pure python version\.",
+            category=UserWarning,
+        )
+        return factory()
 
 
 def _edges_from_mapclassify(data, classifier):
@@ -67,61 +89,61 @@ def _digitize_assignments(data, edges):
 def mc_equal_interval(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.EqualInterval(data, k=int(bins)))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.EqualInterval(data, k=int(bins))))
 
 
 def mc_quantile_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.Quantiles(data, k=int(bins)))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.Quantiles(data, k=int(bins))))
 
 
 def mc_percentile_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.Percentiles(data))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.Percentiles(data)))
 
 
 def mc_pretty_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.PrettyBreaks(data, k=int(bins)))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.PrettyBreaks(data, k=int(bins))))
 
 
 def mc_boxplot_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.BoxPlot(data))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.BoxPlot(data)))
 
 
 def mc_stdev_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.StdMean(data))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.StdMean(data)))
 
 
 def mc_maxbreaks_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.MaximumBreaks(data, k=int(bins)))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.MaximumBreaks(data, k=int(bins))))
 
 
 def mc_natural_breaks(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.NaturalBreaks(data, k=int(bins)))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.NaturalBreaks(data, k=int(bins))))
 
 
 def mc_ckmeans_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.FisherJenks(data, k=int(bins)))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.FisherJenks(data, k=int(bins))))
 
 
 def mc_headtail_bins(data, bins):
     mc = _require_mapclassify()
     data = _clean_numeric_data(data)
-    return _edges_from_mapclassify(data, mc.HeadTailBreaks(data))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.HeadTailBreaks(data)))
 
 
 def mc_defined_interval(data, bins, interval=None):
@@ -143,7 +165,7 @@ def mc_defined_interval(data, bins, interval=None):
         current += interval
         guard += 1
     upper_bounds.append(maxv)
-    return _edges_from_mapclassify(data, mc.UserDefined(data, bins=upper_bounds))
+    return _edges_from_mapclassify(data, _run_with_known_binning_warning_suppressed(lambda: mc.UserDefined(data, bins=upper_bounds)))
 
 
 def unclassed_bins(data, bins):

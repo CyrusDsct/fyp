@@ -5,6 +5,58 @@ import re
 import streamlit as st
 
 
+MAP_RELATED_CRITERIA = [
+    ("data_distribution", "Data distribution"),
+    ("classification_method", "Classification method"),
+    ("normalization_present", "Normalization present"),
+    ("geographic_unit_homogeneous", "Geographic unit homogeneous"),
+    ("administrative_level", "Administrative level"),
+    ("legend_completeness", "Legend completeness"),
+    ("handling_no_missing_data", "Missing-data handling"),
+    ("source_recency", "Source recency"),
+    ("bin_count_appropriateness", "Bin count appropriateness"),
+    ("data_breaks_quality", "Data breaks quality"),
+    ("classification_appropriateness", "Classification appropriateness"),
+    ("choropleth_suitability", "Choropleth suitability"),
+    ("region_hierarchy_consistency", "Region hierarchy consistency"),
+    ("data_coverage_adequacy", "Data coverage adequacy"),
+    ("color_scheme_appropriateness", "Colour scheme appropriateness"),
+    ("color_distinguishability", "Colour distinguishability"),
+    ("legend_placement_quality", "Legend placement quality"),
+    ("title_quality", "Title quality"),
+    ("subtitle_quality", "Subtitle quality"),
+    ("source_quality", "Source quality"),
+]
+
+MAP_RELATED_LABELS = dict(MAP_RELATED_CRITERIA)
+MAP_RELATED_KEYS = set(MAP_RELATED_LABELS)
+MAP_RELATED_PATHS = {
+    "data_distribution": "facts.inferred_interpretation.map.data_distribution",
+    "classification_method": "facts.inferred_interpretation.map.classification_method",
+    "normalization_present": "facts.inferred_interpretation.map.normalization_present",
+    "geographic_unit_homogeneous": "facts.inferred_interpretation.map.geographic_unit_homogenous",
+    "administrative_level": "facts.inferred_interpretation.map.administrative_level",
+    "legend_completeness": "facts.inferred_interpretation.legend.legend_completeness",
+    "handling_no_missing_data": "facts.inferred_interpretation.legend.handling_no_missing_data",
+    "source_recency": "facts.inferred_interpretation.source.source_recency",
+    "bin_count_appropriateness": "facts.normative_evaluation.map.bin_count_appropriateness",
+    "data_breaks_quality": "facts.normative_evaluation.map.data_breaks_quality",
+    "classification_appropriateness": "facts.normative_evaluation.map.classification_appropriateness",
+    "choropleth_suitability": "facts.normative_evaluation.map.choropleth_suitability",
+    "region_hierarchy_consistency": "facts.normative_evaluation.map.region_hierarchy_consistency",
+    "data_coverage_adequacy": "facts.normative_evaluation.map.data_coverage_adequacy",
+    "color_scheme_appropriateness": "facts.normative_evaluation.color.color_scheme_appropriateness",
+    "color_distinguishability": "facts.normative_evaluation.color.color_distinguishability",
+    "legend_placement_quality": "facts.normative_evaluation.legend.legend_placement_quality",
+    "title_quality": "facts.normative_evaluation.title.title_quality",
+    "subtitle_quality": "facts.normative_evaluation.title.subtitle_quality",
+    "source_quality": "facts.normative_evaluation.source.source_quality",
+}
+MAP_RELATED_ALIASES = {
+    "geographic_unit_homogenous": "geographic_unit_homogeneous",
+}
+
+
 BINNING_KEYS = {
     "number_of_bins",
     "data_breaks",
@@ -66,9 +118,28 @@ def _leaf_from_path(path: str) -> str:
     return base.split(".")[-1]
 
 
+def canonical_map_related_key(path: str) -> str | None:
+    leaf = _leaf_from_path(path).lower()
+    leaf = MAP_RELATED_ALIASES.get(leaf, leaf)
+    if leaf in MAP_RELATED_KEYS:
+        return leaf
+    return None
+
+
+def is_map_related_item(item: dict) -> bool:
+    return canonical_map_related_key(str(item.get("id") or "")) is not None
+
+
 def _section_for_item(path: str, quality: str) -> str:
+    normalized_path = (path or "").strip().lower()
+    if normalized_path.startswith("facts.metadata.") or normalized_path.startswith("metadata."):
+        return "Metadata"
+
     if (quality or "").lower().strip() == "meta":
         return "Metadata"
+
+    if canonical_map_related_key(path) is not None:
+        return "Map-related"
     return "Map-related"
 
 
@@ -188,6 +259,31 @@ def build_criteria_items(analysis_json: dict):
                 walk(value, new_path)
 
     walk(extract, "")
+
+    existing_map_related = {
+        canonical_map_related_key(item["id"]): item
+        for item in items
+        if canonical_map_related_key(item["id"]) is not None
+    }
+
+    for key, label in MAP_RELATED_CRITERIA:
+        if key in existing_map_related:
+            continue
+
+        item_id = MAP_RELATED_PATHS[key]
+        synthetic_item = {
+            "id": item_id,
+            "label": label,
+            "value": "unknown",
+            "quality": "neutral",
+            "explanation": "Missing from analysis output. The prompt expects this map-related criterion to be present.",
+            "fixes": "none",
+            "raw": {"value": "unknown", "quality": "neutral", "explanation": "missing", "fixes": "none"},
+            "section": "Map-related",
+            "topic": _topic_for_item(item_id, label, "Map-related"),
+        }
+        items.append(synthetic_item)
+        item_by_id[item_id] = synthetic_item
 
     section_order = {"Binning": 0, "Map-related": 1, "Metadata": 2}
     items.sort(key=lambda item: (section_order.get(item["section"], 9), item["label"].lower(), item["id"].lower()))
@@ -323,21 +419,26 @@ def render_item_cards(items: list, empty_text: str, filter_key: str | None = Non
 
 
 def render_details_panel(analysis_json: dict, items: list):
-    if not items:
-        st.info("No detail items were found in the analysis JSON.")
-        st.json(analysis_json)
-        return
-
-    binning_items = [item for item in items if item.get("section") == "Binning"]
-    map_items = [item for item in items if item.get("section") == "Map-related"]
-    metadata_items = [item for item in items if item.get("section") == "Metadata"]
+    items = items or []
+    binning_items = [item for item in items if item.get("topic") == "Binning"]
+    map_items = [item for item in items if item.get("section") == "Map-related" and item.get("topic") != "Binning"]
+    metadata_items = [item for item in items if item.get("section") == "Metadata" and item.get("topic") != "Binning"]
 
     binning_tab, map_tab, metadata_tab = st.tabs(["Binning", "Map-related", "Metadata"])
 
+    with binning_tab:
+        from ui.sections.diagram import render_binning_details
+
+        render_binning_details(analysis_json)
+        render_item_cards(
+            binning_items,
+            "No binning-specific criteria were found in the analysis output.",
+        )
+
     with map_tab:
+        if not items:
+            st.info("No structured detail items were found in the analysis JSON.")
         render_item_cards(map_items, "No map-related details were found.", filter_key="map_related", section_name="Map-related")
 
     with metadata_tab:
         render_item_cards(metadata_items, "No metadata details were found.", filter_key="metadata", section_name="Metadata")
-
-    return binning_tab, binning_items

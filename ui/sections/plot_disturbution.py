@@ -1,6 +1,7 @@
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
+
 
 def plot_distribution(series: pd.Series):
     s = series.dropna()
@@ -14,11 +15,12 @@ def plot_distribution(series: pd.Series):
         ax.set_title("Distribution")
         ax.set_xlabel("Value")
         ax.set_ylabel("Count")
-        st.pyplot(fig, clear_figure=True, use_container_width=True)
-    else:
-        vc = s.astype(str).value_counts().head(20)
-        fig, ax = plt.subplots(figsize=(7, 3.6))
-        ax.barh(list(reversed(vc.index)), list(reversed(vc.values)), color="#2563eb")
-        ax.set_title("Distribution (Top categories)")
-        ax.set_xlabel("Count")
-        st.pyplot(fig, clear_figure=True, use_container_width=True)
+        st.pyplot(fig, clear_figure=True, width="stretch")
+        return
+
+    vc = s.astype(str).value_counts().head(20)
+    fig, ax = plt.subplots(figsize=(7, 3.6))
+    ax.barh(list(reversed(vc.index)), list(reversed(vc.values)), color="#2563eb")
+    ax.set_title("Distribution (Top categories)")
+    ax.set_xlabel("Count")
+    st.pyplot(fig, clear_figure=True, width="stretch")

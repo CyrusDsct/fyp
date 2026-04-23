@@ -5,7 +5,6 @@ import streamlit as st
 from ui.components.scripts import inject_panel_height_js
 from ui.components.styles import inject_base_css, inject_global_padding
 from ui.sections.criteria import build_criteria_items, render_details_panel
-from ui.sections.diagram import render_binning_details
 from ui.sections.evaluation import render_evaluation
 from ui.sections.start_analysis_sync import start_analysis_sync, sync_analysis_state
 from ui.sections.upload_data import render_data_section
@@ -155,11 +154,7 @@ def render_right_result_panel(analysis_json: dict, items: list[dict]) -> None:
     with details_tab:
         with st.container(height=RIGHT_PANEL_HEIGHT, border=False):
             st.markdown('<span class="panel-marker right-panel-marker"></span>', unsafe_allow_html=True)
-            detail_tabs = render_details_panel(analysis_json, items=items)
-            if detail_tabs is not None:
-                binning_tab, _ = detail_tabs
-                with binning_tab:
-                    render_binning_details(analysis_json)
+            render_details_panel(analysis_json, items=items)
 
 
 def render_right_fallback_panel(status: str, result: dict | None, err: str | None) -> None:
@@ -212,7 +207,7 @@ with left_col:
         clicked = st.button(
             btn_label,
             disabled=(not has_map) or running,
-            use_container_width=True,
+            width="stretch",
             type="primary",
         )
         st.markdown('<div class="left-analyze-spacer"></div>', unsafe_allow_html=True)

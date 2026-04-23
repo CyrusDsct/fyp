@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from ui.sections.plot_disturbution import plot_distribution
+from utils.data_utils import coerce_numeric_series
 
 
 def _read_uploaded_csv(data_bytes: bytes) -> pd.DataFrame:
@@ -37,7 +38,7 @@ def _set_selected_column_state(df: pd.DataFrame, selected: str) -> None:
     st.session_state["csv_df"] = df
     st.session_state["selected_column"] = selected
     try:
-        numeric_series = pd.to_numeric(df[selected], errors="coerce")
+        numeric_series = coerce_numeric_series(df[selected])
         st.session_state["is_numeric_column"] = numeric_series.notna().sum() > 0
     except Exception:
         st.session_state["is_numeric_column"] = False
@@ -53,13 +54,17 @@ def render_data_section():
         label_visibility="collapsed",
     )
 
+    # clear_csv = st.button(
+    #     "Remove CSV",
+    #     disabled=not bool(st.session_state.get("data_bytes")),
+    #     key="clear_uploaded_csv",
+    # )
+    # if clear_csv:
+    #     _clear_data_upload_state()
+    #     st.rerun()
+
     if data_file is not None:
         _sync_data_upload_state(data_file)
-
-    if data_file is None:
-        _clear_data_upload_state()
-        st.caption("Upload a CSV to enable attribute selection.")
-        return
 
     if not st.session_state.get("data_bytes"):
         st.caption("Upload a CSV to enable attribute selection.")
@@ -105,7 +110,7 @@ def render_data_section():
         st.dataframe(
             df[[selected]],
             height=220,
-            use_container_width=True,
+            width="stretch",
             key=f"data_preview__{selected}",
         )
 

@@ -5,6 +5,7 @@ import streamlit as st
 
 from binning.algorithms import BIN_METHODS
 from binning.similarity import interval_similarity
+from utils.data_utils import coerce_numeric_series
 from utils.json_utils import try_parse_json_text
 
 
@@ -179,7 +180,7 @@ def draw_binning_diagram_plotly(
         ),
     )
 
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
 def _get_path(data, path, default=None):
@@ -230,7 +231,7 @@ def _extract_binning_inputs(analysis_json: dict):
         return None, None, None, "The selected data column is no longer available. Please reselect a CSV column."
 
     col_series = csv_df[selected_column]
-    data = pd.to_numeric(col_series, errors="coerce").dropna().to_numpy()
+    data = coerce_numeric_series(col_series).dropna().to_numpy()
     if data.size == 0:
         return None, None, None, "No valid numeric data is available in the selected column."
 
@@ -292,6 +293,88 @@ def _extract_binning_inputs(analysis_json: dict):
         return None, None, None, "Legend data breaks are missing or invalid, so similarity cannot be computed."
 
     return data, bins, manual_edges, None
+
+
+def _extract_binning_status(analysis_json: dict) -> dict:
+    data_bytes = st.session_state.get("data_bytes")
+    csv_df = st.session_state.get("csv_df")
+    selected_column = st.session_state.get("selected_column")
+    is_numeric_col = st.session_state.get("is_numeric_column", None)
+
+    legend_range = None
+    legend_bins = None
+    if isinstance(analysis_json, dict):
+        metadata_map = _get_path(analysis_json, "facts.metadata.map", {}) or {}
+
+        legend_bins = _extract_value_shallow(
+            metadata_map,
+            ["number_of_bins", "num_bins", "NUMBER OF BINS", "NUMBER_OF_BINS", "bins"],
+        )
+        legend_range = _extract_value_shallow(
+            metadata_map,
+            ["data_breaks", "range", "RANGE", "legend_range", "LEGEND_RANGE"],
+        )
+
+        extract = analysis_json.get("extract") or {}
+        if legend_bins is None:
+            legend_bins = _extract_value_shallow(
+                extract,
+                ["NUMBER OF BINS", "num_bins", "bins", "number_of_bins", "NUMBER_OF_BINS"],
+            )
+        if legend_range is None:
+            legend_range = _extract_value_shallow(
+                extract,
+                ["RANGE", "range", "legend_range", "bins_range", "LEGEND_RANGE", "data_breaks"],
+            )
+
+        if legend_bins is None:
+            legend_bins = _get_path(extract, "legend.num_bins.value")
+        if legend_range is None:
+            legend_range = _get_path(extract, "legend.range.value")
+
+        if isinstance(legend_range, str):
+            parsed = try_parse_json_text(legend_range)
+            if parsed is not None:
+                legend_range = parsed
+            else:
+                try:
+                    import ast
+
+                    legend_range = ast.literal_eval(legend_range)
+                except Exception:
+                    pass
+
+    numeric_value_count = 0
+    if csv_df is not None and selected_column in getattr(csv_df, "columns", []):
+        try:
+            numeric_value_count = int(coerce_numeric_series(csv_df[selected_column]).dropna().shape[0])
+        except Exception:
+            numeric_value_count = 0
+
+    return {
+        "has_csv": bool(data_bytes) and csv_df is not None,
+        "selected_column": selected_column,
+        "is_numeric_column": bool(is_numeric_col),
+        "numeric_value_count": numeric_value_count,
+        "legend_bins": legend_bins,
+        "legend_breaks_raw": legend_range,
+        "legend_breaks_parsed": _extract_manual_edges(legend_range),
+    }
+
+
+def render_binning_status(analysis_json: dict) -> None:
+    status = _extract_binning_status(analysis_json)
+
+    st.markdown("**Binning prerequisites**")
+    st.markdown(f"CSV uploaded: `{ 'yes' if status['has_csv'] else 'no' }`")
+    st.markdown(f"Selected column: `{status['selected_column'] or 'none'}`")
+    st.markdown(f"Numeric column: `{ 'yes' if status['is_numeric_column'] else 'no' }`")
+    st.markdown(f"Valid numeric values: `{status['numeric_value_count']}`")
+    st.markdown(f"Legend bin count extracted: `{status['legend_bins'] if status['legend_bins'] is not None else 'missing'}`")
+    st.markdown(
+        f"Legend breaks extracted: `{ 'yes' if status['legend_breaks_parsed'] is not None else 'no' }`"
+    )
+    st.markdown('<div class="binning-gap-collapser"></div>', unsafe_allow_html=True)
 
 
 def build_binning_diagnostics(analysis_json: dict):
@@ -364,7 +447,7 @@ def _format_method_label(name: str, similarity: float | None) -> str:
 
 def render_similarity_explainer(manual_edges, auto_edges, similarity: float | None):
     st.markdown(
-        "Similarity is based on how close each generated bin width is to the uploaded map's bin width."
+        "Similarity is based on both normalized bin widths and normalized edge positions."
     )
     if similarity is None:
         st.write("This method did not produce a valid similarity score.")
@@ -372,33 +455,60 @@ def render_similarity_explainer(manual_edges, auto_edges, similarity: float | No
 
     manual_edges = np.asarray(manual_edges, dtype=float)
     auto_edges = np.asarray(auto_edges, dtype=float)
-    manual_widths = np.diff(manual_edges)
-    auto_widths = np.diff(auto_edges)
+    manual_span = float(manual_edges[-1] - manual_edges[0])
+    auto_span = float(auto_edges[-1] - auto_edges[0])
+    if manual_span <= 0 or auto_span <= 0:
+        st.write("This method did not produce a valid similarity score.")
+        return
+
+    manual_norm = (manual_edges - manual_edges[0]) / manual_span
+    auto_norm = (auto_edges - auto_edges[0]) / auto_span
+    manual_widths = np.diff(manual_norm)
+    auto_widths = np.diff(auto_norm)
     comparable_count = min(len(manual_widths), len(auto_widths))
     width_diffs = np.abs(manual_widths[:comparable_count] - auto_widths[:comparable_count])
     avg_width_error = float(np.mean(width_diffs)) if comparable_count else None
+
+    manual_internal = manual_norm[1:-1]
+    auto_internal = auto_norm[1:-1]
+    comparable_edges = min(len(manual_internal), len(auto_internal))
+    edge_diffs = np.abs(manual_internal[:comparable_edges] - auto_internal[:comparable_edges])
+    avg_edge_error = float(np.mean(edge_diffs)) if comparable_edges else 0.0
+    bin_count_penalty = 1.0 - (abs(len(manual_widths) - len(auto_widths)) / max(len(manual_widths), len(auto_widths), 1))
+    combined_error = ((0.65 * avg_edge_error) + (0.35 * (avg_width_error or 0.0))) if avg_width_error is not None else None
 
     st.markdown("**Step 1. Extract the bin edges from the uploaded map and the candidate method.**")
     st.markdown(f"Uploaded map edges: `{_format_edge_list(manual_edges)}`")
     st.markdown(f"Method edges: `{_format_edge_list(auto_edges)}`")
 
-    st.markdown("**Step 2. Convert edges into bin widths.**")
-    st.markdown(f"Uploaded bin widths: `{_format_edge_list(manual_widths)}`")
-    st.markdown(f"Method bin widths: `{_format_edge_list(auto_widths)}`")
+    st.markdown("**Step 2. Normalize both edge sets onto a 0 to 1 scale.**")
+    st.markdown(f"Uploaded normalized edges: `{_format_edge_list(manual_norm)}`")
+    st.markdown(f"Method normalized edges: `{_format_edge_list(auto_norm)}`")
 
-    st.markdown("**Step 3. Compare each corresponding bin width.**")
+    st.markdown("**Step 3. Compare bin widths and internal edge positions.**")
+    st.markdown(f"Uploaded normalized bin widths: `{_format_edge_list(manual_widths)}`")
+    st.markdown(f"Method normalized bin widths: `{_format_edge_list(auto_widths)}`")
     if comparable_count:
         st.markdown(f"Absolute width differences: `{_format_edge_list(width_diffs)}`")
     if avg_width_error is not None:
-        st.markdown(f"Average width error = `mean({_format_edge_list(width_diffs)}) = {avg_width_error:.2f}`")
+        st.markdown(f"Average width error = `mean({_format_edge_list(width_diffs)}) = {avg_width_error:.3f}`")
+    if comparable_edges:
+        st.markdown(f"Absolute internal-edge differences: `{_format_edge_list(edge_diffs)}`")
+    st.markdown(f"Average internal-edge error = `{avg_edge_error:.3f}`")
+    st.markdown(f"Bin-count penalty = `{bin_count_penalty:.3f}`")
 
     st.markdown("**Step 4. Apply the similarity formula.**")
-    st.code("similarity = 1 / (1 + average_width_error / 100)", language="text")
-    if avg_width_error is not None:
+    st.code(
+        "combined_error = 0.65 * average_edge_error + 0.35 * average_width_error\n"
+        "similarity = max(0, 1 - combined_error) * bin_count_penalty",
+        language="text",
+    )
+    if combined_error is not None:
         st.code(
-            f"similarity = 1 / (1 + {avg_width_error:.2f} / 100)\n"
-            f"similarity = {similarity:.4f}\n"
-            f"similarity = {similarity * 100:.1f}%",
+            f"combined_error = 0.65 * {avg_edge_error:.3f} + 0.35 * {avg_width_error:.3f}\n"
+            f"combined_error = {combined_error:.4f}\n"
+            f"similarity = max(0, 1 - {combined_error:.4f}) * {bin_count_penalty:.3f}\n"
+            f"similarity = {similarity:.4f} = {similarity * 100:.1f}%",
             language="text",
         )
     st.markdown(f"**Final similarity score:** {similarity * 100:.1f}%")
@@ -444,7 +554,9 @@ def render_binning_method_rankings(diagnostics: dict, container_height: int = 34
 def render_binning_details(analysis_json: dict):
     diagnostics = build_binning_diagnostics(analysis_json)
     if diagnostics.get("error"):
-        st.info(diagnostics["error"])
+        render_binning_status(analysis_json)
+        st.warning("Binning comparison is unavailable for this analysis.")
+        st.caption(diagnostics["error"])
         return
 
     st.markdown('<div class="binning-heading uploaded-heading">The uploaded map is binned as:</div>', unsafe_allow_html=True)
