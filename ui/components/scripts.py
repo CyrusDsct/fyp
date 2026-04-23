@@ -16,8 +16,41 @@ def inject_panel_height_js() -> None:
 (function(){
   const doc = window.parent.document;
   const root = doc.documentElement;
+  const frame = window.frameElement;
+
+  function squashHostFrame(){
+    if (!frame) return;
+
+    frame.style.width = '0';
+    frame.style.minWidth = '0';
+    frame.style.maxWidth = '0';
+    frame.style.height = '0';
+    frame.style.minHeight = '0';
+    frame.style.maxHeight = '0';
+    frame.style.border = '0';
+    frame.style.display = 'block';
+    frame.style.position = 'absolute';
+    frame.style.pointerEvents = 'none';
+
+    const host = frame.closest('[data-testid="stElementContainer"]');
+    if (!host) return;
+
+    host.style.width = '0';
+    host.style.minWidth = '0';
+    host.style.maxWidth = '0';
+    host.style.height = '0';
+    host.style.minHeight = '0';
+    host.style.maxHeight = '0';
+    host.style.margin = '0';
+    host.style.padding = '0';
+    host.style.border = '0';
+    host.style.overflow = 'hidden';
+    host.style.position = 'absolute';
+    host.style.pointerEvents = 'none';
+  }
 
   function apply(){
+    squashHostFrame();
     root.style.overflow = 'hidden';
     root.style.height = '100%';
     doc.body.style.overflow = 'hidden';
@@ -95,6 +128,7 @@ def inject_panel_height_js() -> None:
   }
 
   apply();
+  squashHostFrame();
   window.parent.addEventListener('resize', apply);
   setTimeout(apply, 50);
   setTimeout(apply, 150);

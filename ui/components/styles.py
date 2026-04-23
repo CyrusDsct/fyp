@@ -60,11 +60,19 @@ header[data-testid="stHeader"]{
   padding-top:0 !important;
   margin-top:0 !important;
   top:0 !important;
+  height:100dvh !important;
+  min-height:100dvh !important;
+  max-height:100dvh !important;
+  overflow:hidden !important;
 }
 
 [data-testid="stMain"]{
   padding-top:0 !important;
   margin-top:0 !important;
+  height:100dvh !important;
+  min-height:100dvh !important;
+  max-height:100dvh !important;
+  overflow:hidden !important;
 }
 
 [data-testid="stMainBlockContainer"]{
@@ -72,6 +80,12 @@ header[data-testid="stHeader"]{
   padding-bottom:0 !important;
   margin-top:0 !important;
   margin-bottom:0 !important;
+  min-height:100dvh !important;
+  height:100dvh !important;
+  max-height:100dvh !important;
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
 }
 
 div.block-container{
@@ -82,6 +96,12 @@ div.block-container{
   margin-top:-18px !important;
   margin-bottom:0 !important;
   max-width:1460px !important;
+  min-height:100dvh !important;
+  height:100dvh !important;
+  max-height:100dvh !important;
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
 }
 
 div.block-container > div:last-child,
@@ -91,10 +111,38 @@ div.block-container > div:last-child,
   padding-bottom:0 !important;
 }
 
+div.block-container > [data-testid="stHorizontalBlock"],
+[data-testid="stMainBlockContainer"] > [data-testid="stHorizontalBlock"]{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+
 h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 
 [data-testid="stHorizontalBlock"]{
   align-items:flex-start !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.left-col-marker):has(.right-col-marker){
+  align-items:stretch !important;
+  min-height:0 !important;
+  height:100% !important;
+  flex:1 1 auto !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.left-col-marker):has(.right-col-marker) > [data-testid="column"]{
+  display:flex !important;
+  flex-direction:column !important;
+  min-height:0 !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.left-col-marker):has(.right-col-marker) > [data-testid="column"] > [data-testid="stVerticalBlock"]{
+  display:flex !important;
+  flex-direction:column !important;
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  height:100% !important;
 }
 
 [data-testid="stVerticalBlockBorderWrapper"]{
@@ -142,10 +190,18 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 }
 
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker){
+  display:flex !important;
+  flex-direction:column !important;
+  min-height:100% !important;
+  height:100% !important;
   gap:0 !important;
 }
 
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .right-col-marker){
+  display:flex !important;
+  flex-direction:column !important;
+  min-height:100% !important;
+  height:100% !important;
   gap:0 !important;
 }
 
@@ -171,14 +227,37 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 }
 
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker){
+  margin-top:auto !important;
+  padding:8px 14px 5px !important;
+  background:transparent !important;
+  flex:0 0 auto !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stVerticalBlock"]{
+  gap:0 !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stElementContainer"]:has(.left-analyze-dock-marker){
+  height:0 !important;
+  min-height:0 !important;
+  max-height:0 !important;
+  overflow:hidden !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
   > [data-testid="stElementContainer"]:last-child{
   margin:0 !important;
-  padding:8px 14px 0 !important;
+  padding:0 !important;
   background:transparent !important;
 }
 
 .left-analyze-spacer{
-  height:5px !important;
+  height:0 !important;
 }
 
 [data-testid="stVerticalBlockBorderWrapper"]:has(.right-panel-marker) > div{
@@ -186,7 +265,12 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
   overflow-x:hidden !important;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  padding:12px 14px 2px !important;
+  padding:12px 14px 0 !important;
+}
+
+.stButton{
+  margin:0 !important;
+  padding:0 !important;
 }
 
 .section-label{

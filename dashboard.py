@@ -207,13 +207,15 @@ with left_col:
 
     has_map = bool(st.session_state.get("map_bytes"))
     btn_label = "Running..." if running else "Analyze"
-    clicked = st.button(
-        btn_label,
-        disabled=(not has_map) or running,
-        use_container_width=True,
-        type="primary",
-    )
-    st.markdown('<div class="left-analyze-spacer"></div>', unsafe_allow_html=True)
+    with st.container(border=False):
+        st.markdown('<span class="left-analyze-dock-marker"></span>', unsafe_allow_html=True)
+        clicked = st.button(
+            btn_label,
+            disabled=(not has_map) or running,
+            use_container_width=True,
+            type="primary",
+        )
+        st.markdown('<div class="left-analyze-spacer"></div>', unsafe_allow_html=True)
 
     if clicked:
         try:
