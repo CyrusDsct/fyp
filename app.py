@@ -47,8 +47,8 @@ DEFAULT_OPENROUTER_MODELS = [
     "openai/gpt-5",
     "google/gemini-2.5-pro",
     "google/gemini-2.5-flash",
-    "meta-llama/llama-4-maverick",
     "qwen/qwen2.5-vl-72b-instruct",
+    "meta-llama/llama-4-maverick",
 ]
 
 
