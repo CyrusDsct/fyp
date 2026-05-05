@@ -1,3 +1,4 @@
+import hashlib
 import io
 
 import pandas as pd
@@ -21,12 +22,13 @@ def _clear_data_upload_state() -> None:
     st.session_state["csv_df"] = None
     st.session_state["selected_column"] = None
     st.session_state["is_numeric_column"] = None
+    st.session_state["_binning_diagnostics_cache"] = None
     st.session_state.pop("data_attr", None)
 
 
 def _sync_data_upload_state(data_file) -> None:
     data_bytes = data_file.getvalue()
-    data_sig = (data_file.name, len(data_bytes))
+    data_sig = (data_file.name, len(data_bytes), hashlib.sha256(data_bytes).hexdigest())
     st.session_state["data_bytes"] = data_bytes
     st.session_state["data_name"] = data_file.name
     if st.session_state.get("data_sig") != data_sig:
@@ -37,6 +39,7 @@ def _sync_data_upload_state(data_file) -> None:
 def _set_selected_column_state(df: pd.DataFrame, selected: str) -> None:
     st.session_state["csv_df"] = df
     st.session_state["selected_column"] = selected
+    st.session_state["_binning_diagnostics_cache"] = None
     try:
         numeric_series = coerce_numeric_series(df[selected])
         st.session_state["is_numeric_column"] = numeric_series.notna().sum() > 0
@@ -53,15 +56,6 @@ def render_data_section():
         key="data_uploader",
         label_visibility="collapsed",
     )
-
-    # clear_csv = st.button(
-    #     "Remove CSV",
-    #     disabled=not bool(st.session_state.get("data_bytes")),
-    #     key="clear_uploaded_csv",
-    # )
-    # if clear_csv:
-    #     _clear_data_upload_state()
-    #     st.rerun()
 
     if data_file is not None:
         _sync_data_upload_state(data_file)

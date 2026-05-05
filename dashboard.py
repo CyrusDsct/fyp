@@ -1,3 +1,4 @@
+import math
 import time
 
 import streamlit as st
@@ -13,7 +14,7 @@ from utils.json_utils import try_parse_json_text
 
 BACKEND_BASE = "http://127.0.0.1:5000"
 LEFT_PANEL_HEIGHT = 500
-RIGHT_PANEL_HEIGHT = 525
+RIGHT_PANEL_HEIGHT = LEFT_PANEL_HEIGHT + 61
 SESSION_DEFAULTS = {
     "analysis_status": "idle",  # idle | running | done | error
     "analysis_result": None,
@@ -35,6 +36,8 @@ SESSION_DEFAULTS = {
     "selected_column": None,
     "is_numeric_column": None,
     "binning_similarity": None,
+    "_binning_diagnostics_cache": None,
+    "_completing_until": None,
     "left_tab": "Map",
     "right_tab": "Evaluation",
 }
@@ -47,23 +50,40 @@ IDLE_PLACEHOLDER_HTML = (
     '<div class="right-placeholder">'
     '<div class="placeholder-guide">'
     '<div class="placeholder-title">How To Start</div>'
-    '<div class="placeholder-step"><span class="step-label">Step 1</span> Upload a map in the <b>Map</b> tab.</div>'
-    '<div class="placeholder-step"><span class="step-label">Step 2</span> Optionally add <b>Data</b> and <b>Context</b>.</div>'
-    '<div class="placeholder-step"><span class="step-label">Step 3</span> Click <span class="placeholder-action">Analyze</span> to see the results!</div>'
+    '<div class="placeholder-step"><span class="step-label">Step 1</span><span>Upload a map in the <b>Map</b> tab.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 2</span><span><span class="step-optional">Optional</span> Upload your data in the <b>Data</b> tab and select the corresponding column for binning analysis.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 3</span><span><span class="step-optional">Optional</span> Enter your <b>target audience</b> and <b>map purpose</b> in the <b>Context</b> tab for a more tailored evaluation.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 4</span><span>Click <span class="placeholder-action">Analyze</span> to see the results!</span></div>'
     "</div>"
     "</div>"
 )
-RUNNING_STATE_HTML = (
-    '<div class="running-state">'
-    '<div class="running-badge">Running</div>'
-    '<div class="running-title">Analyzing your map...</div>'
-    '<div class="running-steps">'
-    '<div class="running-step">1. Reading map content</div>'
-    '<div class="running-step">2. Extracting legend and binning information</div>'
-    '<div class="running-step">3. Building the right-side results view</div>'
-    "</div>"
-    "</div>"
-)
+def _running_state_html(elapsed_s: float | None) -> str:
+    if elapsed_s is None:
+        pct = 100
+        step_label = "Done!"
+    else:
+        # Slower perceived progress; completion still jumps to 100% when the job finishes.
+        progress = 1 - math.exp(-elapsed_s / 55)
+        pct = min(int(progress * 100), 99)
+
+        if pct < 30:
+            step_label = "Reading map content..."
+        elif pct < 65:
+            step_label = "Extracting legend and binning information..."
+        else:
+            step_label = "Building results..."
+
+    return (
+        '<div class="running-state">'
+        '<div class="running-badge">Running</div>'
+        '<div class="running-title">Analyzing your map...</div>'
+        f'<div class="running-step-label">{step_label}</div>'
+        '<div class="running-progress-track">'
+        f'<div class="running-progress-bar" style="width:{pct}%"></div>'
+        '</div>'
+        f'<div class="running-progress-pct">{pct}%</div>'
+        '</div>'
+    )
 
 st.set_page_config(
     page_title="Fixopleth",
@@ -126,6 +146,9 @@ def render_context_section() -> None:
         key="map_purpose",
         placeholder="e.g. Show population density",
     )
+    applied_audience = st.session_state.get("target_user") or "unknown"
+    applied_purpose = st.session_state.get("map_purpose") or "unknown"
+    st.caption(f"Applied context: audience = **{applied_audience}**, purpose = **{applied_purpose}**")
 
 
 def get_analysis_json(status: str, result: dict | None):
@@ -164,7 +187,9 @@ def render_right_fallback_panel(status: str, result: dict | None, err: str | Non
         if status == "idle":
             st.markdown(IDLE_PLACEHOLDER_HTML, unsafe_allow_html=True)
         elif status == "running":
-            st.markdown(RUNNING_STATE_HTML, unsafe_allow_html=True)
+            started = st.session_state.get("analysis_started_at")
+            elapsed = (time.time() - started) if started else 0
+            st.markdown(_running_state_html(elapsed), unsafe_allow_html=True)
         elif status == "error":
             st.error(f"Analysis failed: {err or 'unknown error'}")
             st.caption(f"Make sure Flask backend is running at {BACKEND_BASE}")
@@ -176,12 +201,25 @@ def render_right_fallback_panel(status: str, result: dict | None, err: str | Non
             st.warning(f"Unknown analysis_status: {status}")
 
 
+def reset_session():
+    for key, value in SESSION_DEFAULTS.items():
+        st.session_state[key] = value
+
+
 init_state()
 sync_analysis_state()
 inject_global_padding(padding_top_rem=0.0, padding_bottom_rem=0.0)
 inject_base_css()
 inject_panel_height_js()
-st.markdown(TITLE_HTML, unsafe_allow_html=True)
+
+title_col, restart_col = st.columns([8, 2], vertical_alignment="center")
+with title_col:
+    st.markdown(TITLE_HTML, unsafe_allow_html=True)
+with restart_col:
+    st.markdown('<span class="restart-action-marker"></span>', unsafe_allow_html=True)
+    if st.button("Restart analysis", type="secondary", key="restart_btn", width="stretch"):
+        reset_session()
+        st.rerun()
 
 left_col, right_col = st.columns([4, 6], gap="medium")
 
@@ -228,12 +266,27 @@ with right_col:
     err = st.session_state.get("analysis_error")
     analysis_json = get_analysis_json(status, result)
 
-    if analysis_json is not None:
+    # Brief 100% state before showing results
+    completing_until = st.session_state.get("_completing_until")
+    if analysis_json is not None and completing_until is not None:
+        if time.time() < completing_until:
+            # Show 100% bar
+            with st.container(height=RIGHT_PANEL_HEIGHT, border=False):
+                st.markdown('<span class="panel-marker right-panel-marker"></span>', unsafe_allow_html=True)
+                st.markdown(_running_state_html(None), unsafe_allow_html=True)
+        else:
+            st.session_state["_completing_until"] = None
+            items, _ = build_criteria_items(analysis_json)
+            render_right_result_panel(analysis_json, items)
+    elif analysis_json is not None:
         items, _ = build_criteria_items(analysis_json)
         render_right_result_panel(analysis_json, items)
     else:
         render_right_fallback_panel(status, result, err)
 
-if st.session_state.get("analysis_status") == "running":
+if completing_until is not None and time.time() < completing_until:
+    time.sleep(0.25)
+    st.rerun()
+elif st.session_state.get("analysis_status") == "running":
     time.sleep(1)
     st.rerun()

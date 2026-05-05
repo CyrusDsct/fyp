@@ -1,4 +1,3 @@
-# ui/components/scripts.py
 import streamlit.components.v1 as components
 
 
@@ -7,9 +6,6 @@ def _inject_script(script: str) -> None:
 
 
 def inject_panel_height_js() -> None:
-    """
-    Computes --panel-h based on viewport height.
-    """
     _inject_script(
         """
 <script>
@@ -81,20 +77,10 @@ def inject_panel_height_js() -> None:
     if (!wrapper) return;
 
     const top = wrapper.getBoundingClientRect().top;
-    const h = Math.max(360, Math.floor(vh - top - 4));
+    const h = Math.max(360, Math.ceil(vh - top));
     root.style.setProperty('--panel-h', h + 'px');
 
     const diagramMarker = doc.querySelector('.diagram-page-marker');
-    const diagramPage = !!diagramMarker;
-    const rightMarker = doc.querySelector('.right-panel-marker');
-    if (rightMarker) {
-      const rightWrapper = rightMarker.closest('[data-testid="stVerticalBlockBorderWrapper"]');
-      const rightInner = rightWrapper ? rightWrapper.firstElementChild : null;
-      if (rightInner) {
-        rightInner.style.overflowY = diagramPage ? 'hidden' : 'auto';
-        rightInner.style.overflowX = 'hidden';
-      }
-    }
 
     if (diagramMarker) {
       let el = diagramMarker.parentElement;

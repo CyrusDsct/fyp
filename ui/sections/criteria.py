@@ -68,6 +68,16 @@ BINNING_KEYS = {
     "classification_appropriateness",
 }
 
+
+def has_binning_data() -> bool:
+    """Whether CSV data with a numeric column is available for binning analysis."""
+    return (
+        bool(st.session_state.get("data_bytes"))
+        and st.session_state.get("csv_df") is not None
+        and st.session_state.get("selected_column") is not None
+        and bool(st.session_state.get("is_numeric_column"))
+    )
+
 TOPIC_RULES = [
     ("Color", ("color", "colour")),
     ("Legend", ("legend",)),
@@ -145,9 +155,6 @@ def _section_for_item(path: str, quality: str) -> str:
 
 def _topic_for_item(path: str, label: str, section: str) -> str:
     haystack = f"{path} {label}".lower()
-
-    if _leaf_from_path(path) in BINNING_KEYS:
-        return "Binning"
 
     for topic, keywords in TOPIC_RULES:
         if any(keyword in haystack for keyword in keywords):
@@ -234,16 +241,18 @@ def build_criteria_items(analysis_json: dict):
     def walk(obj, path=""):
         if is_item_dict(obj):
             item_id = path or "unknown"
+            section = _section_for_item(item_id, obj.get("quality"))
+            quality = "meta" if section == "Metadata" else _as_str(obj.get("quality"), "neutral").lower().strip()
             item = {
                 "id": item_id,
                 "label": label_for(item_id),
                 "value": _as_str(obj.get("value")),
-                "quality": _as_str(obj.get("quality"), "neutral").lower().strip(),
+                "quality": quality,
                 "explanation": _as_str(obj.get("explanation")),
                 "fixes": _as_str(obj.get("fixes"), "none"),
                 "raw": obj,
+                "section": section,
             }
-            item["section"] = _section_for_item(item_id, item["quality"])
             item["topic"] = _topic_for_item(item_id, item["label"], item["section"])
             items.append(item)
             item_by_id[item_id] = item
@@ -285,7 +294,7 @@ def build_criteria_items(analysis_json: dict):
         items.append(synthetic_item)
         item_by_id[item_id] = synthetic_item
 
-    section_order = {"Binning": 0, "Map-related": 1, "Metadata": 2}
+    section_order = {"Map-related": 0, "Metadata": 1}
     items.sort(key=lambda item: (section_order.get(item["section"], 9), item["label"].lower(), item["id"].lower()))
     return items, item_by_id
 
@@ -369,7 +378,7 @@ def render_item_cards(items: list, empty_text: str, filter_key: str | None = Non
             if filter_key == "map_related" and selected_qualities and "bad" in selected_qualities:
                 bad_count = sum(1 for item in items if item.get("quality") == "bad")
                 if bad_count == 0:
-                    st.caption("No bad items exist in Map-related for this analysis. Any score reduction is likely coming from Binning.")
+                    st.caption("No bad items exist in Map-related for this analysis. Any score reduction is likely coming from neutral criteria.")
                     return
             st.caption("No items match the current filters.")
             return
@@ -420,20 +429,19 @@ def render_item_cards(items: list, empty_text: str, filter_key: str | None = Non
 
 def render_details_panel(analysis_json: dict, items: list):
     items = items or []
-    binning_items = [item for item in items if item.get("topic") == "Binning"]
-    map_items = [item for item in items if item.get("section") == "Map-related" and item.get("topic") != "Binning"]
-    metadata_items = [item for item in items if item.get("section") == "Metadata" and item.get("topic") != "Binning"]
+    binning_available = has_binning_data()
+    map_items = [item for item in items if item.get("section") == "Map-related"]
+    metadata_items = [item for item in items if item.get("section") == "Metadata"]
 
     binning_tab, map_tab, metadata_tab = st.tabs(["Binning", "Map-related", "Metadata"])
 
     with binning_tab:
-        from ui.sections.diagram import render_binning_details
+        if binning_available:
+            from ui.sections.diagram import render_binning_details
 
-        render_binning_details(analysis_json)
-        render_item_cards(
-            binning_items,
-            "No binning-specific criteria were found in the analysis output.",
-        )
+            render_binning_details(analysis_json)
+        else:
+            st.info("Upload a CSV file and select a numeric data column to enable CSV-based binning comparison diagrams. Map-level binning criteria are still evaluated from the uploaded map.")
 
     with map_tab:
         if not items:

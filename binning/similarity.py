@@ -167,7 +167,7 @@ def bin_similarity_2d(manual_meta, auto_meta):
     avg_error = total / len(errors)
     return avg_error
 
-def interval_similarity(manual_edges, auto_edges):
+def interval_similarity_details(manual_edges, auto_edges):
     """
     Compare normalized edge positions and bin widths.
     This penalizes methods whose bins have similar widths but are shifted to
@@ -220,8 +220,125 @@ def interval_similarity(manual_edges, auto_edges):
         if not np.isfinite(similarity):
             return None
 
-        return float(similarity)
+        return {
+            "similarity": float(similarity),
+            "manual_norm": m_norm,
+            "auto_norm": a_norm,
+            "manual_widths": manual_widths,
+            "auto_widths": auto_widths,
+            "width_error": width_error,
+            "edge_error": edge_error,
+            "bin_count_penalty": float(bin_count_penalty),
+            "combined_error": float(combined_error),
+        }
 
     except Exception:
         return None
+
+
+def interval_similarity(manual_edges, auto_edges):
+    details = interval_similarity_details(manual_edges, auto_edges)
+    return details["similarity"] if details else None
+
+
+def _counts_per_bin(data, edges):
+    edges = np.asarray(edges, dtype=float)
+    x = np.asarray(data, dtype=float).reshape(-1)
+    x = x[np.isfinite(x)]
+    counts = np.zeros(max(len(edges) - 1, 0), dtype=int)
+    for i, (left, right) in enumerate(zip(edges[:-1], edges[1:])):
+        if i < len(counts) - 1:
+            counts[i] = int(np.sum((x >= left) & (x < right)))
+        else:
+            counts[i] = int(np.sum((x >= left) & (x <= right)))
+    return counts
+
+
+def frequency_overlap_details(manual_edges, auto_edges, data):
+    """
+    Compare bin heights as histogram-density overlap.
+    Each bin contributes mass=count/total_data_count and height=mass/bin_width.
+    The score is the area under min(manual_density, auto_density), in [0, 1].
+    """
+    try:
+        m = np.unique(np.sort(np.asarray(manual_edges, dtype=float)))
+        a = np.unique(np.sort(np.asarray(auto_edges, dtype=float)))
+        x = np.asarray(data, dtype=float).reshape(-1)
+        x = x[np.isfinite(x)]
+
+        if m.size < 2 or a.size < 2 or x.size == 0:
+            return None
+        if np.any(np.diff(m) <= 0) or np.any(np.diff(a) <= 0):
+            return None
+
+        manual_counts = _counts_per_bin(x, m)
+        auto_counts = _counts_per_bin(x, a)
+        total = float(x.size)
+
+        manual_widths = np.diff(m)
+        auto_widths = np.diff(a)
+        manual_mass = manual_counts / total
+        auto_mass = auto_counts / total
+        manual_density = manual_mass / manual_widths
+        auto_density = auto_mass / auto_widths
+
+        union_edges = np.unique(np.concatenate([m, a]))
+        if union_edges.size < 2:
+            return None
+
+        overlap = 0.0
+        for left, right in zip(union_edges[:-1], union_edges[1:]):
+            width = float(right - left)
+            if width <= 0:
+                continue
+            mid = (left + right) / 2.0
+            mi = np.searchsorted(m, mid, side="right") - 1
+            ai = np.searchsorted(a, mid, side="right") - 1
+            md = manual_density[mi] if 0 <= mi < len(manual_density) and mid <= m[mi + 1] else 0.0
+            ad = auto_density[ai] if 0 <= ai < len(auto_density) and mid <= a[ai + 1] else 0.0
+            overlap += min(float(md), float(ad)) * width
+
+        overlap = float(np.clip(overlap, 0.0, 1.0))
+        return {
+            "similarity": overlap,
+            "manual_counts": manual_counts,
+            "auto_counts": auto_counts,
+            "manual_shares": manual_mass,
+            "auto_shares": auto_mass,
+            "manual_density": manual_density,
+            "auto_density": auto_density,
+        }
+
+    except Exception:
+        return None
+
+
+def composite_similarity_details(manual_edges, auto_edges, data, interval_weight=0.45, frequency_weight=0.55):
+    interval = interval_similarity_details(manual_edges, auto_edges)
+    frequency = frequency_overlap_details(manual_edges, auto_edges, data)
+    if not interval or not frequency:
+        return None
+
+    total_weight = interval_weight + frequency_weight
+    if total_weight <= 0:
+        return None
+
+    similarity = (
+        interval_weight * interval["similarity"] + frequency_weight * frequency["similarity"]
+    ) / total_weight
+    similarity = float(np.clip(similarity, 0.0, 1.0))
+    return {
+        "similarity": similarity,
+        "interval_similarity": interval["similarity"],
+        "frequency_similarity": frequency["similarity"],
+        "interval_weight": float(interval_weight),
+        "frequency_weight": float(frequency_weight),
+        "interval": interval,
+        "frequency": frequency,
+    }
+
+
+def composite_similarity(manual_edges, auto_edges, data):
+    details = composite_similarity_details(manual_edges, auto_edges, data)
+    return details["similarity"] if details else None
     

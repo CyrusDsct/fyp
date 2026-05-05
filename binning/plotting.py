@@ -41,8 +41,7 @@ def draw_interval_bar(
         else:
             use_frequency_height = False
 
-    # ---- Make the chart compact (key for "no scrolling") ----
-    fig, ax = plt.subplots(figsize=(6, 0.55))  #  much shorter than before
+    fig, ax = plt.subplots(figsize=(6, 0.55))
 
     width_total = maxv - minv
     ax.barh(
@@ -64,11 +63,10 @@ def draw_interval_bar(
         if (not np.isfinite(left)) or (not np.isfinite(right)) or (right <= left):
             continue
 
-        # optional height by frequency (usually makes things taller,default False)
         if use_frequency_height and (counts is not None) and (max_count is not None) and max_count > 0:
             h = 0.16 + 0.24 * (counts[i] / max_count) 
         else:
-            h = 0.32  # thin bar
+            h = 0.32
 
         c = cmap((i + 0.5) / max(n_int, 1))
         ax.barh(
@@ -81,7 +79,6 @@ def draw_interval_bar(
             linewidth=0.6,
         )
 
-    # axes styling (compact)
     ax.set_yticks([])
     ax.set_xlim(minv, maxv)
     ax.set_ylim(-0.45, 0.45) 

@@ -44,11 +44,11 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
 DEFAULT_OPENROUTER_MODELS = [
+    "meta-llama/llama-4-maverick",
     "openai/gpt-5",
     "google/gemini-2.5-pro",
     "google/gemini-2.5-flash",
     "qwen/qwen2.5-vl-72b-instruct",
-    "meta-llama/llama-4-maverick",
 ]
 
 
@@ -178,7 +178,7 @@ def _split_env_list(name: str) -> list[str]:
 
 
 def _get_model_candidates() -> list[str]:
-    primary = os.getenv("OPENROUTER_PRIMARY_MODEL", "").strip() or "openai/gpt-5"
+    primary = os.getenv("OPENROUTER_PRIMARY_MODEL", "").strip() or "meta-llama/llama-4-maverick"
     fallback_models = _split_env_list("OPENROUTER_FALLBACK_MODELS") or DEFAULT_OPENROUTER_MODELS[1:]
 
     models = [primary] + fallback_models
@@ -284,7 +284,6 @@ def _prepare_image_for_model(image_path: str, trace_id: str) -> tuple[str, str, 
         raise RuntimeError("Failed to prepare image payload for model")
     return last_payload
 
-# JSON cleanup
 _CODE_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
 _FIRST_JSON_OBJ_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -320,7 +319,6 @@ def _to_float(x: Any) -> Optional[float]:
         return float(x)
     if isinstance(x, str):
         s = x.strip()
-        # remove commas and units-ish
         s = s.replace(",", "")
         try:
             return float(s)
@@ -342,7 +340,6 @@ def normalize_range_value_to_intervals(range_value: Any) -> Optional[list[list[f
     if range_value is None:
         return None
 
-    # intervals already
     if isinstance(range_value, list) and range_value and all(isinstance(it, list) for it in range_value):
         intervals = []
         for pair in range_value:
@@ -355,7 +352,6 @@ def normalize_range_value_to_intervals(range_value: Any) -> Optional[list[list[f
             intervals.append([lo, hi])
         return intervals
 
-    # edges
     if isinstance(range_value, list) and range_value and all(not isinstance(it, list) for it in range_value):
         edges = [_to_float(v) for v in range_value]
         if any(v is None for v in edges):
@@ -364,14 +360,11 @@ def normalize_range_value_to_intervals(range_value: Any) -> Optional[list[list[f
             return None
         return [[edges[i], edges[i + 1]] for i in range(len(edges) - 1)]
 
-    # string format
     if isinstance(range_value, str):
         s = range_value.strip()
         nums = [float(n) for n in _RANGE_NUM_RE.findall(s)]
-        # Heuristic: if we can interpret as pairs -> intervals
         if len(nums) >= 2 and len(nums) % 2 == 0:
             return [[nums[i], nums[i + 1]] for i in range(0, len(nums), 2)]
-        # Otherwise interpret as edges
         if len(nums) >= 2:
             return [[nums[i], nums[i + 1]] for i in range(len(nums) - 1)]
         return None
@@ -389,8 +382,6 @@ def intervals_to_edges(intervals: list[list[float]]) -> Optional[list[float]]:
 
 
 def normalize_analysis(analysis_json: dict) -> dict:
-    # Ensure extract.RANGE has normalized intervals + edges when possible.
-    
     extract = analysis_json.get("extract")
     if not isinstance(extract, dict):
         return analysis_json
@@ -410,6 +401,18 @@ def normalize_analysis(analysis_json: dict) -> dict:
         range_obj.setdefault("intervals", "unknown")
         range_obj.setdefault("edges", "unknown")
 
+    return analysis_json
+
+
+def attach_input_context(analysis_json: dict, audience: str, purpose: str, distribution: str) -> dict:
+    if not isinstance(analysis_json, dict):
+        return analysis_json
+
+    analysis_json["input_context"] = {
+        "audience": str(audience or "unknown").strip() or "unknown",
+        "purpose": str(purpose or "unknown").strip() or "unknown",
+        "distribution": str(distribution or "unknown").strip() or "unknown",
+    }
     return analysis_json
 
 
@@ -531,7 +534,6 @@ def _build_success_result(
 
 
 def _repair_to_json(or_client: OpenRouter, model: str, raw_text: str, trace_id: str) -> str:
-    # ask model to output ONLY valid JSON for the previous output.
     repair_prompt = (
         "You previously attempted to output JSON but it is not valid JSON.\n"
         "Fix it and output a SINGLE valid JSON object only. No markdown fences, no commentary.\n\n"
@@ -635,6 +637,7 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
 
     analysis_json = _unwrap_analysis_json(analysis_json)
     analysis_json = normalize_analysis(analysis_json)
+    analysis_json = attach_input_context(analysis_json, audience, purpose, distribution)
 
     logging.info("[%s] model=%s returned and parsed in %.2fs", trace_id, model_used, time.time() - t0)
 
@@ -655,9 +658,6 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
     )
 
 
-# ===========
-# File routes
-# ===========
 @app.route("/uploadImage", methods=["POST"])
 def upload_image():
     try:
@@ -733,9 +733,6 @@ def serve_image(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
-# ============================
-# Synchronous analyze API
-# ============================
 @app.route("/analyze", methods=["POST"])
 def analyze_sync():
     try:

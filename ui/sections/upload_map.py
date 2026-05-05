@@ -1,3 +1,4 @@
+import hashlib
 import io
 
 import streamlit as st
@@ -9,7 +10,7 @@ from ui.sections.start_analysis_sync import reset_analysis_state
 def _store_uploaded_map(map_file) -> None:
     new_bytes = map_file.getvalue()
     new_name = map_file.name
-    new_sig = (new_name, len(new_bytes))
+    new_sig = (new_name, len(new_bytes), hashlib.sha256(new_bytes).hexdigest())
     prev_sig = st.session_state.get("map_sig")
 
     st.session_state["map_bytes"] = new_bytes

@@ -171,10 +171,8 @@ def mc_defined_interval(data, bins, interval=None):
 def unclassed_bins(data, bins):
     data = _clean_numeric_data(data)
     return np.array([float(np.min(data)), float(np.max(data))])
-# ============================================================
-# Divide the data range (max - min) into equal-sized intervals.
-# Each bin has the same numeric width.
-# ============================================================
+
+
 def equal_interval(data, bins):
     minv = data.min()
     maxv = data.max()
@@ -188,9 +186,6 @@ def equal_interval(data, bins):
     return np.array(edges)
 
 
-# ============================================================
-# Bin sizes grow exponentially (powers of 2). 
-# ============================================================
 def exponential_bins(data, bins):
     N = len(data)
     powers = []
@@ -230,10 +225,6 @@ def exponential_bins(data, bins):
         p += 1
     return np.array(uniq)
 
-# ============================================================
-# Each bin boundary grows geometrically from the minimum value.
-# The ratio between consecutive bins is constant.
-# ============================================================
 def geometric_interval(data, bins):
     minv = data.min()
     maxv = data.max()
@@ -242,7 +233,6 @@ def geometric_interval(data, bins):
         if len(positive) > 0:
             minv = float(np.min(positive))
         else:
-            # just avoid divide by 0
             minv = 1e-9
     ratio = (maxv / minv) ** (1.0 / bins)
     edges = [minv]
@@ -254,12 +244,8 @@ def geometric_interval(data, bins):
     return np.array(edges)
 
 
-# ============================================================
-# Place breaks where data differences between consecutive values are the largest. Captures sudden jumps in sorted data.
-# ============================================================
 def maxbreaks_bins(data, bins):
     arr = np.sort(data)
-    # get the difference between two consecutive data
     diffs = arr[1:] - arr[:-1]
     if len(diffs) < bins - 1:
         edges = [arr[0], arr[-1]]
@@ -284,9 +270,6 @@ def maxbreaks_bins(data, bins):
     return np.array(uniq)
 
 
-# ============================================================
-# Split the dataset so that each bin contains (approximately) the same number of observations.
-# ============================================================
 def quantile_bins(data, bins):
     edges = []
     qs = np.linspace(0, 1, bins + 1)
@@ -298,9 +281,6 @@ def quantile_bins(data, bins):
     return np.array(edges)
 
 
-# ============================================================
-# Use quartiles (Q1, median, Q3) and IQR rule to define edges.
-# ============================================================
 def boxplot_bins(data):
     q1 = np.percentile(data, 25)
     q2 = np.percentile(data, 50)
@@ -319,16 +299,12 @@ def boxplot_bins(data):
     return np.array(uniq)
 
 
-# ============================================================
-# Create bins based on mean ± k * standard deviation.
-# ============================================================
 def stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0):
     mu = np.mean(data)
     sigma = np.std(data)
     edges = []
 
     if mean_as_boundary:
-        # Variant 1: mean is a boundary 
         mid = bins // 2
         i = 0
         while i <= bins:
@@ -337,7 +313,6 @@ def stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0):
             i += 1
 
     else:
-        # Variant 2: mean is at the center → must be odd number of bins
         if bins % 2 == 0:
             raise ValueError('Variant 2 only works for odd bin count.')
         mid = bins // 2
@@ -349,10 +324,6 @@ def stdev_bins(data, bins, mean_as_boundary=True, sdfactor=1.0):
 
     return np.array(edges)
 
-# ============================================================
-# Recursive splitting for heavy-tailed distributions.
-# Each iteration splits values above the mean until uniform.
-# ============================================================
 def headtail_bins(data):
     breaks = []
     x = np.sort(data)
@@ -360,7 +331,6 @@ def headtail_bins(data):
         mean_val = np.mean(x)
         breaks.append(mean_val)
         x = x[x > mean_val]
-        #avoid infinity loop
         if len(breaks) > 20:
             break
     edges = [data.min()]
@@ -380,9 +350,6 @@ def headtail_bins(data):
     return np.array(uniq)
 
 
-# ============================================================
-# Chooses rounded, human-friendly intervals that cover the data range.
-# ============================================================
 def pretty_bins(data, bins):
     minv = float(np.min(data))
     maxv = float(np.max(data))
@@ -409,10 +376,6 @@ def pretty_bins(data, bins):
     return np.array(uniq)
 
 
-# ============================================================
-# To be confirmed
-# Minimizes within-class variance and maximizes between-class variance.
-# ============================================================
 def natural_breaks(data, bins):
     data = np.sort(np.array(data, dtype=float))
     n = len(data)
@@ -424,14 +387,12 @@ def natural_breaks(data, bins):
     lower_class_limits = np.zeros((n + 1, bins + 1), dtype=int)
     variance_combinations = np.full((n + 1, bins + 1), np.inf)
 
-    # initialize for one class
     i = 1
     while i <= n:
         variance_combinations[i][1] = np.var(data[:i]) * (i - 1)
         lower_class_limits[i][1] = 1
         i += 1
 
-    # dynamic programming
     k = 2
     while k <= bins:
         i = k

@@ -1,15 +1,11 @@
 import numpy as np
-import pandas as pd
 
 def bin_metadata(raw_data, bin_edges):
-    # Ensure unique, sorted edges (preserve exact manual edges)
     bin_edges = np.array(sorted(set(bin_edges)), dtype=float)
 
 
-    # Assign each value to the correct bin
     bin_assignments = np.digitize(raw_data, bin_edges, right=True) - 1
 
-    # Count how many data points fall into each bin
     bin_sizes = {}
     i = 0
     while i < len(bin_assignments):
@@ -20,7 +16,6 @@ def bin_metadata(raw_data, bin_edges):
             bin_sizes[idx] = 1
         i += 1
 
-    # Sort by bin index
     sorted_keys = sorted(bin_sizes.keys())
     sorted_bin_sizes = {}
     i = 0
@@ -29,7 +24,6 @@ def bin_metadata(raw_data, bin_edges):
         sorted_bin_sizes[key] = bin_sizes[key]
         i += 1
 
-    # Build output dictionary
     result = {}
     result["rawData"] = raw_data
     result["dataRange"] = [float(np.min(raw_data)), float(np.max(raw_data))]
@@ -44,7 +38,6 @@ def bin_metadata(raw_data, bin_edges):
 
     result["binSizes"] = sorted_bin_sizes
 
-    # Convert bin assignments to a list
     bin_list = []
     i = 0
     while i < len(bin_assignments):

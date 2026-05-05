@@ -1,4 +1,3 @@
-# backend_client.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,8 +6,6 @@ import requests
 
 @dataclass(frozen=True)
 class BackendClient:
-    # Simple HTTP client for Flask backend.
-
     base_url: str
 
     def upload_image(self, image_bytes: bytes, filename: str | None = None) -> str:

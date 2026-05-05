@@ -1,4 +1,3 @@
-# ui/components/styles.py
 import streamlit as st
 
 
@@ -206,10 +205,10 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 }
 
 [data-testid="stVerticalBlockBorderWrapper"]:has(.right-panel-marker) > div{
-  height:var(--panel-h) !important;
-  max-height:var(--panel-h) !important;
+  min-height:0 !important;
   border:none !important;
   border-radius:0 !important;
+  box-sizing:border-box !important;
 }
 
 [data-testid="stVerticalBlockBorderWrapper"]:has(.left-panel-marker) > div{
@@ -229,7 +228,7 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
   > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker){
   margin-top:auto !important;
-  padding:8px 14px 5px !important;
+  padding:8px 14px 30px !important;
   background:transparent !important;
   flex:0 0 auto !important;
 }
@@ -250,7 +249,7 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 }
 
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
-  > [data-testid="stElementContainer"]:last-child{
+  > [data-testid="stElementContainer"]:last-child:not(:has(.left-analyze-dock-marker)){
   margin:0 !important;
   padding:0 !important;
   background:transparent !important;
@@ -265,7 +264,8 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
   overflow-x:hidden !important;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  padding:12px 14px 0 !important;
+  padding:8px 14px 8px !important;
+  scroll-padding-bottom:8px !important;
 }
 
 .stButton{
@@ -330,16 +330,30 @@ hr{
 }
 
 .placeholder-step{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:0 0.45rem;
   font-size:0.95rem;
   line-height:1.5;
   margin-bottom:0.55rem;
 }
 
 .step-label{
-  display:inline-block;
-  min-width:58px;
   font-weight:900;
   color:#111827;
+  white-space:nowrap;
+}
+
+.step-optional{
+  display:inline-block;
+  padding:0.04rem 0.38rem;
+  border-radius:999px;
+  background:#e5e7eb;
+  color:#6b7280;
+  font-size:0.75rem;
+  font-weight:700;
+  vertical-align:middle;
+  margin-right:0.2rem;
 }
 
 .placeholder-action{
@@ -406,6 +420,31 @@ hr{
   font-weight:700;
 }
 
+.running-step-label{
+  font-size:0.88rem;
+  font-weight:600;
+  color:#4b5563;
+}
+.running-progress-track{
+  width:100%;
+  height:10px;
+  background:#e5e7eb;
+  border-radius:999px;
+  overflow:hidden;
+}
+.running-progress-bar{
+  height:100%;
+  background:var(--data-blue);
+  border-radius:999px;
+  transition:width 1s linear;
+}
+.running-progress-pct{
+  font-size:0.82rem;
+  font-weight:700;
+  color:var(--muted);
+  text-align:right;
+}
+
 [data-testid="stDataFrame"]{
   border: 1px solid rgba(37,99,235,0.25) !important;
   border-radius: 10px !important;
@@ -429,7 +468,23 @@ hr{
   padding:0 !important;
   line-height:1 !important;
   overflow:visible !important;
-  transform:translateY(-6px) !important;
+}
+/* Title row columns: collapse vertical gaps */
+[data-testid="stHorizontalBlock"]:has(.top-title-wrap){
+  margin:0 !important; padding:0 !important;
+  gap:0 !important;
+  flex:0 0 auto !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:visible !important;
+}
+
+[data-testid="stElementContainer"]:has(.top-title-wrap){
+  flex:0 0 auto !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
 }
 .top-title{
   margin:0 !important;
@@ -441,6 +496,56 @@ hr{
   color:var(--text);
   display:inline-block;
   overflow:visible !important;
+}
+
+/* Restart button: same row as title */
+[data-testid="column"]:has(.restart-action-marker),
+[data-testid="stColumn"]:has(.restart-action-marker){
+  display:flex !important;
+  justify-content:flex-end !important;
+  align-items:center !important;
+  min-width:0 !important;
+}
+
+[data-testid="stElementContainer"]:has(.restart-action-marker){
+  height:0 !important;
+  min-height:0 !important;
+  max-height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+}
+
+[data-testid="column"]:has(.restart-action-marker) [data-testid="stButton"],
+[data-testid="stColumn"]:has(.restart-action-marker) [data-testid="stButton"]{
+  width:100% !important;
+}
+
+[data-testid="column"]:has(.restart-action-marker) [data-testid="stBaseButton-secondary"],
+[data-testid="stColumn"]:has(.restart-action-marker) [data-testid="stBaseButton-secondary"]{
+  width:100% !important;
+}
+
+[data-testid="column"]:has(.restart-action-marker) [data-testid="stBaseButton-secondary"] button,
+[data-testid="stColumn"]:has(.restart-action-marker) [data-testid="stBaseButton-secondary"] button{
+  width:100% !important;
+  min-width:140px !important;
+  height:34px !important;
+  padding:0.28rem 0.95rem !important;
+  border-radius:10px !important;
+  border:1px solid #d7dbe1 !important;
+  background:linear-gradient(180deg, #ffffff 0%, #f3f5f8 100%) !important;
+  color:#1f2937 !important;
+  font-size:0.84rem !important;
+  font-weight:900 !important;
+  white-space:nowrap !important;
+  box-shadow:0 1px 2px rgba(17,24,39,0.06) !important;
+}
+
+[data-testid="column"]:has(.restart-action-marker) [data-testid="stBaseButton-secondary"] button:hover,
+[data-testid="stColumn"]:has(.restart-action-marker) [data-testid="stBaseButton-secondary"] button:hover{
+  border-color:#c5ccd6 !important;
+  background:linear-gradient(180deg, #f8fafc 0%, #e9edf3 100%) !important;
 }
 
 [data-testid="stTabs"]{
@@ -500,11 +605,13 @@ hr{
 [data-testid="stTabs"] [data-baseweb="tab-panel"]{
   padding:0 !important;
   margin:0 !important;
+  overflow:visible !important;
 }
 
 [data-testid="stTabs"] [data-baseweb="tab-panel"] > div{
   padding-top:0 !important;
   margin-top:0 !important;
+  overflow:visible !important;
 }
 
 /* Left input tabs: equal widths + red required star on first tab only */
@@ -594,6 +701,40 @@ hr{
   height:1px;
   background:rgba(17,24,39,0.08);
   margin:0.16rem 0 0.35rem;
+}
+
+.similarity-metric-row{
+  display:flex;
+  align-items:center;
+  gap:0.32rem;
+  color:#1f2937;
+  font-size:0.92rem;
+  line-height:1.35;
+  margin:0.12rem 0;
+}
+
+.similarity-metric-label{
+  font-weight:700;
+}
+
+.similarity-tooltip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#eef2f7;
+  border:1px solid #cbd5e1;
+  color:#475569;
+  font-size:0.72rem;
+  font-weight:900;
+  cursor:help;
+  flex:0 0 auto;
+}
+
+.similarity-metric-value{
+  color:#374151;
 }
 
 .overview-card{

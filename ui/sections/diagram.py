@@ -1,12 +1,17 @@
+import html
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from binning.algorithms import BIN_METHODS
-from binning.similarity import interval_similarity
+from binning.similarity import composite_similarity_details
 from utils.data_utils import coerce_numeric_series
 from utils.json_utils import try_parse_json_text
+
+
+EXCLUDED_COMPARISON_METHODS = {"Defined Interval"}
 
 
 def _extract_manual_edges(legend_range):
@@ -377,7 +382,7 @@ def render_binning_status(analysis_json: dict) -> None:
     st.markdown('<div class="binning-gap-collapser"></div>', unsafe_allow_html=True)
 
 
-def build_binning_diagnostics(analysis_json: dict):
+def _compute_binning_diagnostics(analysis_json: dict):
     data, bins, manual_edges, error = _extract_binning_inputs(analysis_json)
     if error:
         return {"error": error}
@@ -386,6 +391,9 @@ def build_binning_diagnostics(analysis_json: dict):
     similarity_dict = {}
 
     for method_name, func in BIN_METHODS.items():
+        if method_name in EXCLUDED_COMPARISON_METHODS:
+            continue
+
         try:
             edges = func(data, bins)
             if edges is None:
@@ -394,13 +402,14 @@ def build_binning_diagnostics(analysis_json: dict):
             if len(edges) < 2:
                 continue
 
-            score = interval_similarity(manual_edges, edges)
-            score_value = float(score) if score is not None else None
+            similarity_details = composite_similarity_details(manual_edges, edges, data)
+            score_value = float(similarity_details["similarity"]) if similarity_details is not None else None
             method_records.append(
                 {
                     "name": method_name,
                     "edges": edges,
                     "similarity": score_value,
+                    "similarity_details": similarity_details,
                 }
             )
             if score_value is not None:
@@ -435,6 +444,15 @@ def build_binning_diagnostics(analysis_json: dict):
     }
 
 
+def build_binning_diagnostics(analysis_json: dict):
+    cached = st.session_state.get("_binning_diagnostics_cache")
+    if cached is not None:
+        return cached
+    result = _compute_binning_diagnostics(analysis_json)
+    st.session_state["_binning_diagnostics_cache"] = result
+    return result
+
+
 def _format_edge_list(edges) -> str:
     return ", ".join(f"{float(edge):.2f}".rstrip("0").rstrip(".") for edge in edges)
 
@@ -445,110 +463,134 @@ def _format_method_label(name: str, similarity: float | None) -> str:
     return f"{name} (Similarity: {similarity * 100:.1f}%)"
 
 
-def render_similarity_explainer(manual_edges, auto_edges, similarity: float | None):
+def _tooltip_metric(label: str, value: str, tooltip: str):
+    label_html = html.escape(label)
+    value_html = html.escape(value)
+    tooltip_html = html.escape(tooltip)
     st.markdown(
-        "Similarity is based on both normalized bin widths and normalized edge positions."
+        (
+            '<div class="similarity-metric-row">'
+            f'<span class="similarity-metric-label">{label_html}</span>'
+            f'<span class="similarity-tooltip" title="{tooltip_html}">?</span>'
+            f'<span class="similarity-metric-value">= <code>{value_html}</code></span>'
+            "</div>"
+        ),
+        unsafe_allow_html=True,
     )
-    if similarity is None:
+
+
+def render_similarity_explainer(manual_edges, auto_edges, similarity: float | None, details: dict | None = None):
+    st.markdown(
+        "Similarity combines interval structure with data-count distribution. "
+        "The data-count part compares bin heights using histogram-density overlap."
+    )
+    if similarity is None or not details:
         st.write("This method did not produce a valid similarity score.")
         return
 
     manual_edges = np.asarray(manual_edges, dtype=float)
     auto_edges = np.asarray(auto_edges, dtype=float)
-    manual_span = float(manual_edges[-1] - manual_edges[0])
-    auto_span = float(auto_edges[-1] - auto_edges[0])
-    if manual_span <= 0 or auto_span <= 0:
-        st.write("This method did not produce a valid similarity score.")
-        return
+    interval = details.get("interval") or {}
+    frequency = details.get("frequency") or {}
 
-    manual_norm = (manual_edges - manual_edges[0]) / manual_span
-    auto_norm = (auto_edges - auto_edges[0]) / auto_span
-    manual_widths = np.diff(manual_norm)
-    auto_widths = np.diff(auto_norm)
-    comparable_count = min(len(manual_widths), len(auto_widths))
-    width_diffs = np.abs(manual_widths[:comparable_count] - auto_widths[:comparable_count])
-    avg_width_error = float(np.mean(width_diffs)) if comparable_count else None
+    manual_norm = np.asarray(interval.get("manual_norm", []), dtype=float)
+    auto_norm = np.asarray(interval.get("auto_norm", []), dtype=float)
+    manual_widths = np.asarray(interval.get("manual_widths", []), dtype=float)
+    auto_widths = np.asarray(interval.get("auto_widths", []), dtype=float)
+    avg_width_error = float(interval.get("width_error", 0.0))
+    avg_edge_error = float(interval.get("edge_error", 0.0))
+    bin_count_penalty = float(interval.get("bin_count_penalty", 0.0))
+    frequency_score = float(details.get("frequency_similarity", 0.0))
+    manual_counts = np.asarray(frequency.get("manual_counts", []), dtype=float)
+    auto_counts = np.asarray(frequency.get("auto_counts", []), dtype=float)
+    manual_shares = np.asarray(frequency.get("manual_shares", []), dtype=float)
+    auto_shares = np.asarray(frequency.get("auto_shares", []), dtype=float)
 
-    manual_internal = manual_norm[1:-1]
-    auto_internal = auto_norm[1:-1]
-    comparable_edges = min(len(manual_internal), len(auto_internal))
-    edge_diffs = np.abs(manual_internal[:comparable_edges] - auto_internal[:comparable_edges])
-    avg_edge_error = float(np.mean(edge_diffs)) if comparable_edges else 0.0
-    bin_count_penalty = 1.0 - (abs(len(manual_widths) - len(auto_widths)) / max(len(manual_widths), len(auto_widths), 1))
-    combined_error = ((0.65 * avg_edge_error) + (0.35 * (avg_width_error or 0.0))) if avg_width_error is not None else None
-
-    st.markdown("**Step 1. Extract the bin edges from the uploaded map and the candidate method.**")
+    st.markdown("**Step 1. Extract the bin edges from the uploaded map and this method.**")
     st.markdown(f"Uploaded map edges: `{_format_edge_list(manual_edges)}`")
-    st.markdown(f"Method edges: `{_format_edge_list(auto_edges)}`")
+    st.markdown(f"This method edges: `{_format_edge_list(auto_edges)}`")
 
     st.markdown("**Step 2. Normalize both edge sets onto a 0 to 1 scale.**")
     st.markdown(f"Uploaded normalized edges: `{_format_edge_list(manual_norm)}`")
-    st.markdown(f"Method normalized edges: `{_format_edge_list(auto_norm)}`")
+    st.markdown(f"This method normalized edges: `{_format_edge_list(auto_norm)}`")
 
     st.markdown("**Step 3. Compare bin widths and internal edge positions.**")
     st.markdown(f"Uploaded normalized bin widths: `{_format_edge_list(manual_widths)}`")
-    st.markdown(f"Method normalized bin widths: `{_format_edge_list(auto_widths)}`")
-    if comparable_count:
-        st.markdown(f"Absolute width differences: `{_format_edge_list(width_diffs)}`")
-    if avg_width_error is not None:
-        st.markdown(f"Average width error = `mean({_format_edge_list(width_diffs)}) = {avg_width_error:.3f}`")
-    if comparable_edges:
-        st.markdown(f"Absolute internal-edge differences: `{_format_edge_list(edge_diffs)}`")
-    st.markdown(f"Average internal-edge error = `{avg_edge_error:.3f}`")
-    st.markdown(f"Bin-count penalty = `{bin_count_penalty:.3f}`")
-
-    st.markdown("**Step 4. Apply the similarity formula.**")
-    st.code(
-        "combined_error = 0.65 * average_edge_error + 0.35 * average_width_error\n"
-        "similarity = max(0, 1 - combined_error) * bin_count_penalty",
-        language="text",
+    st.markdown(f"This method normalized bin widths: `{_format_edge_list(auto_widths)}`")
+    _tooltip_metric(
+        "Average width error",
+        f"{avg_width_error:.3f}",
+        "Average absolute difference between the uploaded map's normalized bin widths and this method's normalized bin widths. Lower is better.",
     )
-    if combined_error is not None:
-        st.code(
-            f"combined_error = 0.65 * {avg_edge_error:.3f} + 0.35 * {avg_width_error:.3f}\n"
-            f"combined_error = {combined_error:.4f}\n"
-            f"similarity = max(0, 1 - {combined_error:.4f}) * {bin_count_penalty:.3f}\n"
-            f"similarity = {similarity:.4f} = {similarity * 100:.1f}%",
-            language="text",
-        )
-    st.markdown(f"**Final similarity score:** {similarity * 100:.1f}%")
+    _tooltip_metric(
+        "Average internal-edge error",
+        f"{avg_edge_error:.3f}",
+        "Average absolute difference between the internal break positions after both edge sets are normalized to 0-1. Lower means the breaks occur in more similar positions.",
+    )
+    _tooltip_metric(
+        "Bin-count penalty",
+        f"{bin_count_penalty:.3f}",
+        "Penalty for using a different number of bins from the uploaded map. 1 means the bin counts match; lower values mean the method has more or fewer bins.",
+    )
+
+    st.markdown("**Step 4. Compare bin heights from data counts.**")
+    st.markdown(f"Uploaded bin counts: `{_format_edge_list(manual_counts)}`")
+    st.markdown(f"This method bin counts: `{_format_edge_list(auto_counts)}`")
+    st.markdown(f"Uploaded count shares: `{_format_edge_list(manual_shares)}`")
+    st.markdown(f"This method count shares: `{_format_edge_list(auto_shares)}`")
+    st.markdown(
+        "Frequency similarity is the overlapping area between the two bin-height distributions: "
+        "`integral(min(uploaded_density, method_density))`."
+    )
+    _tooltip_metric(
+        "Frequency similarity",
+        f"{frequency_score:.3f}",
+        "Overlap between the uploaded map's bin-height distribution and this method's bin-height distribution. Higher means the methods place similar shares of data into bins.",
+    )
+
+    st.markdown("**Step 5. Final similarity score.**")
+    _tooltip_metric(
+        "Final similarity score",
+        f"{similarity * 100:.1f}%",
+        "Weighted final score: 45% interval similarity and 55% frequency similarity. Higher means this method is more similar to the uploaded map's legend breaks and data distribution.",
+    )
 
 
-def render_binning_method_rankings(diagnostics: dict, container_height: int = 340, chart_height: int = 150):
+def render_binning_method_rankings(diagnostics: dict, chart_height: int = 150):
     method_records_sorted = diagnostics.get("method_records_sorted") or []
     if not method_records_sorted:
         st.info("No binning methods were available for comparison.")
         return
 
-    with st.container(height=container_height, border=False):
-        for index, record in enumerate(method_records_sorted):
-            if record.get("error"):
-                st.caption(f"Could not compute this method: {record['error']}")
-                st.markdown("<hr>", unsafe_allow_html=True)
-                continue
+    for index, record in enumerate(method_records_sorted):
+        if record.get("error"):
+            st.caption(f"Could not compute this method: {record['error']}")
+            st.markdown("<hr>", unsafe_allow_html=True)
+            continue
 
-            st.markdown(
-                f'<div class="binning-method-name">{_format_method_label(record["name"], record.get("similarity"))}</div>',
-                unsafe_allow_html=True,
-            )
-            draw_binning_diagram_plotly(
+        st.markdown(
+            f'<div class="binning-method-name">{_format_method_label(record["name"], record.get("similarity"))}</div>',
+            unsafe_allow_html=True,
+        )
+        draw_binning_diagram_plotly(
+            record["edges"],
+            method_name=record["name"],
+            similarity=record.get("similarity"),
+            data=diagnostics["data"],
+            tick_precision=2,
+            height=chart_height,
+            title_text="",
+        )
+
+        with st.expander("Show calculation"):
+            render_similarity_explainer(
+                diagnostics["manual_edges"],
                 record["edges"],
-                method_name=record["name"],
-                similarity=record.get("similarity"),
-                data=diagnostics["data"],
-                tick_precision=2,
-                height=chart_height,
-                title_text="",
+                record.get("similarity"),
+                record.get("similarity_details"),
             )
-
-            with st.expander("Show calculation"):
-                render_similarity_explainer(
-                    diagnostics["manual_edges"],
-                    record["edges"],
-                    record.get("similarity"),
-                )
-            if index < len(method_records_sorted) - 1:
-                st.markdown('<div class="binning-method-divider"></div>', unsafe_allow_html=True)
+        if index < len(method_records_sorted) - 1:
+            st.markdown('<div class="binning-method-divider"></div>', unsafe_allow_html=True)
 
 
 def render_binning_details(analysis_json: dict):
@@ -572,7 +614,7 @@ def render_binning_details(analysis_json: dict):
     st.markdown('<div class="binning-gap-collapser"></div>', unsafe_allow_html=True)
     st.markdown('<div class="binning-heading tight-top larger">Other similar binning methods include...</div>', unsafe_allow_html=True)
     st.markdown('<div class="binning-method-list-top"></div>', unsafe_allow_html=True)
-    render_binning_method_rankings(diagnostics, container_height=360, chart_height=138)
+    render_binning_method_rankings(diagnostics, chart_height=138)
 
 
 def render_classification_diagram(analysis_json: dict):
@@ -582,4 +624,4 @@ def render_classification_diagram(analysis_json: dict):
         return
 
     st.subheader("Binning related")
-    render_binning_method_rankings(diagnostics, container_height=420, chart_height=155)
+    render_binning_method_rankings(diagnostics, chart_height=155)

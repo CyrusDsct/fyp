@@ -1,150 +1,88 @@
-fyp
-===
+# Fixopleth
 
-Overview
---------
-This project consists of:
-1) A Flask backend (API server)
-2) A Streamlit frontend (dashboard UI)
+Fixopleth is a small web application for reviewing choropleth maps. It has a
+Flask backend for file upload and AI analysis, and a Streamlit dashboard for the
+user interface.
 
-You must run the backend and the Streamlit dashboard in TWO separate terminals.
+The current JSON fields and scoring criteria are documented in
+`DATA_DICTIONARY.md`.
 
-------------------------------------------------------------
-Prerequisites
-------------------------------------------------------------
-- Python 3.10+ recommended
-- pip (Python package manager)
+## Requirements
 
-------------------------------------------------------------
-Project Setup 
-------------------------------------------------------------
+- Python 3.10 or newer
+- pip
+- MongoDB connection string
+- OpenRouter API key
 
-1) Get the project code
------------------------
-If you are cloning from GitHub:
+## Setup
 
-    git clone <YOUR_REPO_URL>
-    cd fyp
+Create and activate a virtual environment:
 
-Make sure you are in the project root (you should see files like app.py, dashboard.py).
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
 
-2) Create a virtual environment (recommended)
----------------------------------------------
-A virtual environment keeps dependencies isolated and avoids conflicts.
+If PowerShell blocks activation, run this once in the same terminal:
 
-Windows (PowerShell):
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
 
-    python -m venv .venv
-    .\.venv\Scripts\Activate.ps1
+Install the dependencies:
 
-If activation is blocked, run this and try again:
+```powershell
+pip install -r requirements.txt
+```
 
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-    .\.venv\Scripts\Activate.ps1
+Create a local `.env` file from the example:
 
-macOS / Linux:
+```powershell
+Copy-Item .env.example .env
+```
 
-    python3 -m venv .venv
-    source .venv/bin/activate
+Then fill in the required values:
 
-You should now see "(.venv)" in your terminal prompt.
+```text
+MONGO_URI=...
+OPENROUTER_API_KEY=...
+```
 
-To deactivate later:
+The `.env` file is local only and should not be committed.
 
-    deactivate
+## Running
 
+Run the backend and dashboard in two separate terminals.
 
-3) Install dependencies
------------------------
-Option A (preferred): Install from requirements.txt
+Backend:
 
-    pip install -r requirements.txt
+```powershell
+python app.py
+```
 
-Option B: Install manually (if requirements.txt does not exist)
+Default backend URL:
 
-    pip install flask pymongo streamlit requests python-dotenv
+```text
+http://127.0.0.1:5000
+```
 
+Dashboard:
 
-4) Create your local .env (DO NOT commit this file)
----------------------------------------------------
-This project uses a local .env file for configuration.
+```powershell
+streamlit run dashboard.py
+```
 
-4.1 Create .env from template
+Default dashboard URL:
 
-macOS / Linux:
+```text
+http://localhost:8501
+```
 
-    cp .env.example .env
+## Notes
 
-Windows (PowerShell):
-
-    Copy-Item .env.example .env
-
-4.2 Edit .env and fill in values
-
-Example .env:
-
-
-Notes:
-- OPENROUTER_API_KEY is sensitive. Keep it private. Do NOT push it to GitHub.
-- MONGO_URI may contain credentials. Keep it private. Do NOT push it to GitHub.
-
-
-5) IMPORTANT: Ensure .env is actually loaded
---------------------------------------------
-Python does NOT automatically load .env by default.
-This project expects python-dotenv to load it (load_dotenv()).
-
-If you get missing-key errors even though .env is filled,
-make sure the entry scripts call:
-
-    from dotenv import load_dotenv
-    load_dotenv()
-
-
-------------------------------------------------------------
-Running the project (Two terminals)
-------------------------------------------------------------
-
-Terminal 1: Start Flask backend
--------------------------------
-From the project root:
-
-    python app.py
-
-Expected: backend runs on (default)
-- http://127.0.0.1:5000
-
-Keep this terminal running.
-
-
-Terminal 2: Start Streamlit dashboard
-------------------------------------
-From the project root:
-
-    streamlit run dashboard.py
-
-Open the Streamlit UI in your browser:
-- http://localhost:8501
-
-
-------------------------------------------------------------
-Troubleshooting
-------------------------------------------------------------
-
-1) Installation issues
-- Ensure you activated the virtual environment
-- Try upgrading pip:
-
-    python -m pip install --upgrade pip
-
-
-------------------------------------------------------------
-What NOT to commit / push to GitHub
-------------------------------------------------------------
-Do NOT push:
-- .env
-- .venv/ or venv/
-- __pycache__/ and *.pyc
-
-You should use .gitignore to ignore these files.
-Only push .env.example (template), not .env (real secrets).
+- Keep `.env`, `.venv/`, `__pycache__/`, and `*.pyc` out of Git.
+- If environment variables are not being read, check that the entry scripts call
+  `load_dotenv()`.
+- The backend must stay running while the Streamlit dashboard calls the analysis
+  API.

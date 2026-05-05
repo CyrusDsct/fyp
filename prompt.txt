@@ -1,14 +1,18 @@
 ***Task Overview***
 Given a choropleth map image, extract the required information, evaluate the map’s quality and return the response as JSON only. No additional text is allowed outside the JSON output.
 This map’s intended audience is {{audience}}, and its intended purpose is {{purpose}}.
+Uploaded data distribution summary, if provided: {{distribution}}.
+Context-use requirement: If the intended audience is not "unknown", explicitly mention that audience in the "map_quality" field. If the intended purpose is not "unknown", explicitly mention that purpose in the "map_quality" field. Recommendations must be phrased for the stated audience and purpose, not as generic map-design advice.
 ***Instructions***
 Carefully read the guidelines below to determine what information must be extracted from the map.
-Analyze the map to extract each required data item. Track the qualities (good/bad/neutral/meta) associated with each item. All items in the “metadata” subsection of the Required Data Items section must be classed as "meta". Items with no good/bad criteria listed in the Required Data Items section should be classed as neutral by default.
+Analyze the map to extract each required data item. Track the qualities (good/bad/neutral/meta) associated with each item. All items in the “metadata” subsection of the Required Data Items section must be classed as “meta”. Every item in the “inferred_interpretation” and “normative_evaluation” sections has quality rationale defined — classify each as good, bad, or neutral strictly according to its rationale. Use “neutral” only when the rationale explicitly allows it (e.g., when evidence is genuinely ambiguous). Do not default to neutral.
+Evaluate critically: the purpose of this system is to help users improve their maps, so identifying weaknesses is valuable. Do not give “good” unless the criterion is clearly and fully met — if something is merely adequate, passable, or only partially meets the standard, classify it as “bad”. When uncertain between “good” and “bad”, lean toward “bad” so the user receives actionable feedback. Always provide concrete recommendations for every “bad” item in the fixes field.
+IMPORTANT: Evaluate the map strictly from the perspective of the intended audience, not from your perspective as an AI. Do not use your own knowledge or inference to fill in gaps. If something is not explicitly shown, labeled, or written on the map, the viewer cannot know it. For example, if a colour on the map has no legend entry, it is unexplained to the viewer even if you can guess what it means. Judge only what the map itself communicates.
 For the provided description of the map’s data distribution, assess whether the binning (classification) method shown in the map is suitable for that distribution, and include this assessment in the JSON output.
-In addition to the JSON-formatted output, append the following textual summaries inside the JSON fields:  
-A factual explanation of the map contents (up to 100 words). Highlight the main points by surrounding them with double asterisks (e.g., **Main point**).
-A 300-word evaluation explaining whether the map is good or bad, based on extracted information and the count of good/bad items. Highlight the main points within this explanation with double asterisks.
-If the map is judged “bad,” include a 150-word recommendations section summarizing how the map can be improved. Highlight the main points with double asterisks.
+In addition to the JSON-formatted output, append the following textual summaries inside the JSON fields:
+A factual explanation of the map contents (up to 100 words). Highlight only meaningful key facts or concrete findings with double asterisks, e.g. **unemployment rate by county** or **missing source date**. Do not highlight single filler words, transition words, generic phrases, or function words.
+A 300-word evaluation explaining whether the map is good or bad, based on extracted information and the count of good/bad items. This field must include one sentence that begins with "For the intended audience, ..." when audience is provided, and one sentence that relates the judgment to the stated purpose when purpose is provided. Highlight only specific quality judgments or evidence-based findings with double asterisks, e.g. **legend is incomplete**, **classification method is unclear**, or **colors are distinguishable**. Do not highlight isolated words such as "while", "because", "map", "data", or "good".
+Include a 150-word recommendations section summarizing how the map can be improved based on any criteria marked “bad”. Recommendations must be tailored to the intended audience and purpose when they are provided. Highlight only specific recommended actions with double asterisks, e.g. **add a source date** or **label the no-data category**. If one or more criteria are bad, provide only actionable recommendation sentences and do not include the word “none”. If no criteria are bad, the entire recommendations field must be exactly “none”.
 Confirm that the final JSON is syntactically correct and includes all fields in the structure shown below. Do not output anything outside this JSON.
 ***Required Data Items***
 {
@@ -123,11 +127,21 @@ Confirm that the final JSON is syntactically correct and includes all fields in 
             "gappy": "Natural gaps between values",
             "domain-specific": "Requires contextual knowledge",
             "unknown": "Cannot determine from map"
+          },
+          "rationale": {
+            "good": "The map's binning effectively reveals the underlying data pattern — regions are spread meaningfully across bins, and the viewer can infer how the data is distributed from the map alone",
+            "bad": "The binning hides or distorts the data pattern — most regions are concentrated in one or two bins while others are nearly empty, making spatial variation hard to read",
+            "neutral": "The data pattern is partially visible but the binning is not ideal for this distribution"
           }
         },
         "classification_method": {
           "description": "The binning method used to split the range of data into discrete bins. For maps with continuous binning, this attribute is always 'Unclassed'. If no existing binning method can be detected, assume that 'Manual Interval' is used.",
           "options": "Equal Interval/Pretty Breaks/Geometric Interval/Exponential/Logarithmic/Quantile/Percentile/Standard Deviation/Natural Breaks/Head/Tail Breaks/Maximum Breaks/Manual Interval/Unclassed",
+          "rationale": {
+            "good": "The chosen classification method suits the data distribution (see good_for lists below) and produces bins that spread regions meaningfully across the range",
+            "bad": "The classification method is a poor fit for the data distribution (see bad_for lists below), or the breaks appear arbitrary and produce an uneven spread of regions across bins",
+            "neutral": "The method is acceptable but not optimal for the detected distribution"
+          },
           "methods": {
             "Equal Interval": {
               "description": "Divides the data range into equal bin intervals. Best for uniform/normal distributions.",
@@ -193,9 +207,14 @@ Confirm that the final JSON is syntactically correct and includes all fields in 
           }
         },
         "normalization_present": {
-          "description": "Whether the mapped variable appears to be normalized (per capita, rate, percent, index) rather than raw totals.",
-          "options": "yes/no/unclear",
-          "evidence_sources": ["title", "legend labels", "subtitle", "visual patterns"]
+          "description": "Whether the mapped variable appears to be normalized (per capita, rate, percent, index) rather than raw totals. Not applicable to categorical maps.",
+          "options": "yes/no/unclear/not applicable",
+          "evidence_sources": ["title", "legend labels", "subtitle", "visual patterns"],
+          "rationale": {
+            "good": "The title, subtitle, or legend labels explicitly indicate the variable is normalized (e.g., '% of population', 'per 100k', 'rate', 'index'). Also good if the map is categorical (e.g., land use, religion) since normalization does not apply. Do not infer normalization from your own knowledge — it must be stated on the map.",
+            "bad": "The text on the map suggests raw totals or counts (e.g., 'Population', 'GDP', 'Number of...'), OR the variable name does not indicate whether the data is normalized — if a viewer cannot tell from the map's text alone, classify as bad.",
+            "neutral": "Some text suggests normalization but it is ambiguous (e.g., the variable could be either a rate or a count)"
+          }
         },
         "normalization_type": {
           "description": "Specific type of normalization if present.",
@@ -203,27 +222,52 @@ Confirm that the final JSON is syntactically correct and includes all fields in 
         },
         "geographic_unit_homogeneous": {
           "description": "Whether all regions use the same administrative/geographic unit (e.g., all countries, all states).",
-          "options": "yes/no/mixed/not applicable"
+          "options": "yes/no/mixed/not applicable",
+          "rationale": {
+            "good": "All regions are at the same administrative scale, making visual comparison between regions fair and meaningful",
+            "bad": "Regions mix different administrative scales (e.g., countries alongside states), making area comparisons misleading because differently-sized units are treated as equivalent",
+            "neutral": "not applicable"
+          }
         },
         "administrative_level": {
           "description": "Primary geographic unit of analysis.",
-          "options": "country/state/province/county/district/neighborhood/custom/unknown"
+          "options": "country/state/province/county/district/neighborhood/custom/unknown",
+          "rationale": {
+            "good": "The administrative level is appropriate for the map's purpose — granular enough to show meaningful variation without being so detailed that patterns are lost",
+            "bad": "The level is too coarse to show useful variation for the stated purpose (e.g., country-level for a city planning topic), or too granular to be readable (e.g., thousands of tiny districts with no discernible pattern)",
+            "neutral": "The level is acceptable but a different level might better serve the stated purpose"
+          }
         }
       },
       "legend": {
         "legend_completeness": {
-          "description": "All the non-background colors used in the map are represented in the legend.",
-          "options": "yes/no/not applicable"
+          "description": "All the non-background colors used in the map are represented in the legend with clear, readable labels.",
+          "options": "yes/no/not applicable",
+          "rationale": {
+            "good": "Every non-background colour on the map has a matching legend entry with a clear, readable label. A viewer can interpret any region by referencing the legend alone.",
+            "bad": "Any colour on the map has no corresponding legend entry (even if you can guess what it means, the viewer cannot), OR legend entries exist but labels are missing, unreadable, cut off, or ambiguous.",
+            "neutral": "not applicable"
+          }
         },
         "handling_no_missing_data": {
-          "description": "There exists a distinct color or pattern for regions that do not have data.",
-          "options": "yes/no/not applicable"
+          "description": "There exists a distinct color or pattern for regions that do not have data, AND it is explicitly labeled in the legend.",
+          "options": "yes/no/not applicable",
+          "rationale": {
+            "good": "Missing-data regions use a visually distinct colour/pattern AND the legend contains an explicit entry for it (e.g., 'No Data', 'N/A', 'Data not available'). Both conditions must be met.",
+            "bad": "Regions with no data exist but: the legend does NOT contain a 'No Data' entry (bad even if the colour looks distinct — the viewer cannot know what it means), OR the no-data colour is too similar to a data bin colour, OR no-data regions are simply left blank with no acknowledgement.",
+            "neutral": "not applicable — no missing-data regions are visible on the map"
+          }
         }
       },
       "source": {
         "source_recency": {
           "description": "Whether source appears recent relative to map publication (within ~1 year).",
-          "options": "recent/outdated/unknown/not applicable"
+          "options": "recent/outdated/unknown/not applicable",
+          "rationale": {
+            "good": "The data is current enough that the map's conclusions are still relevant — the source date is appropriate for the topic's rate of change",
+            "bad": "The data is outdated for a time-sensitive topic (e.g., using 2010 data for current economic indicators), making the map potentially misleading",
+            "neutral": "unknown or not applicable — recency cannot be determined, or no source is cited (source_quality will penalise this separately)"
+          }
         }
       }
     },
@@ -234,46 +278,49 @@ Confirm that the final JSON is syntactically correct and includes all fields in 
           "options": "good/bad",
           "rationale": {
             "good": "3-7 bins",
-            "bad": "Too many bins (clutters), too few bins (oversimplifies)"
+            "bad": "Fewer than 3 bins (oversimplifies, hides patterns), more than 7 bins (clutters, hard to distinguish), or bin count is clearly unsuitable for the data range"
           }
         },
         "data_breaks_quality": {
-          "description": "Whether bins are continuous, non-overlapping, and span the whole data range.",
+          "description": "Whether bins are continuous, non-overlapping, span the whole data range, and produce a meaningful distribution of regions across bins.",
           "options": "good/bad",
           "rationale": {
-            "good": "Bins are continuous, non-overlapping, complete range",
-            "bad": "Gaps, overlaps, or incomplete coverage"
+            "good": "Bins are continuous, non-overlapping, cover the full data range, and regions are reasonably distributed across bins (no single bin dominates with >60% of regions)",
+            "bad": "Gaps or overlaps between bins, incomplete range coverage, OR most regions cluster into one or two bins while the rest are nearly empty"
           }
         },
         "classification_appropriateness": {
           "description": "Whether classification method matches detected data distribution.",
-          "options": "good/bad/unknown",
-          "rationale": "See classification_methods.good_for/bad_for mappings above"
+          "options": "good/bad/neutral",
+          "rationale": {
+            "good": "Method is listed in the classification_method.methods.good_for list for the detected distribution",
+            "bad": "Method is listed in the bad_for list for the detected distribution, or the method produces a visibly poor spread of data across bins. If the distribution is unknown, classify as bad since the method cannot be validated.",
+            "neutral": "Distribution is ambiguous, preventing confident assessment, but the bins appear reasonable"
+          }
         },
         "choropleth_suitability": {
-          "description": "Whether variable is appropriate for choropleth (normalized, not raw area-biased totals).",
+          "description": "Whether variable is appropriate for choropleth (normalized for quantitative data, or inherently categorical).",
           "options": "good/bad/unclear",
           "rationale": {
-            "good": "Normalized variable (rates, per capita, indexes)",
-            "bad": "Raw totals on area map (population, GDP by country)",
-            "neutral": "Cannot determine from available evidence"
+            "good": "Variable is clearly normalized (rates, per capita, percentages, indexes), OR the map shows inherently categorical data (e.g., dominant type, classification, yes/no) where normalization is not applicable",
+            "bad": "Raw totals or counts on an area map (e.g., 'Population', 'GDP', 'Number of cases') where larger regions get disproportionate visual weight, or the variable type cannot be identified from any text on the map",
+            "neutral": "Some evidence of normalization exists but not conclusive"
           }
         },
         "region_hierarchy_consistency": {
           "description": "Whether geographic division hierarchy is consistent across map.",
           "options": "good/bad",
           "rationale": {
-            "good": "All regions same scale (all countries OR all states)",
-            "bad": "Mixed scales (countries + states on same map)"
+            "good": "All regions are at the same administrative scale (e.g., all countries OR all states) with no mixing",
+            "bad": "Mixed scales (countries + states on same map), or some regions are visibly subdivided while others are not"
           }
         },
         "data_coverage_adequacy": {
           "description": "Whether sufficient data coverage for meaningful analysis, where coverage refers to all regions represented in the legend",
           "options": "good/bad",
           "rationale": {
-            "good": "100%",
-            "neutral": ">=70% - >100%"
-            "bad": "<70%"
+            "good": ">90% of visible regions have data represented in the legend",
+            "bad": "<=90% coverage — many regions are blank, greyed out, or unaccounted for, weakening the map's analytical value"
           }
         }
       },
@@ -282,54 +329,55 @@ Confirm that the final JSON is syntactically correct and includes all fields in 
           "description": "Whether color scheme matches data type and ordering.",
           "options": "good/bad",
           "rationale": {
-            "good": "Sequential→ordered data, Diverging→bipolar data, Categorical→unordered",
-            "bad": "Mismatch (rainbow→ordered, single-hue→categorical)"
+            "good": "Scheme correctly matches data type: sequential for ordered data, diverging for data with a meaningful midpoint, categorical for unordered classes",
+            "bad": "Mismatch between scheme and data type (e.g., rainbow/spectral for ordered data, single-hue for categorical data, sequential for bipolar data), or scheme uses culturally misleading associations (e.g., green=high for a negative indicator)"
           }
         },
         "color_distinguishability": {
           "description": "Whether legend hues are visually distinguishable between bins.",
           "options": "good/bad",
           "rationale": {
-            "good": "Clear visual separation between adjacent colors",
-            "bad": "Similar hues create confusion"
+            "good": "Every pair of adjacent legend colours is easily distinguishable at a glance, including for common colour vision deficiencies (avoid red-green only differentiation)",
+            "bad": "Any two adjacent legend colours are hard to tell apart, the lightness steps are uneven making some bins blend together, or the scheme relies solely on red-green contrast"
           }
         }
       },
       "legend": {
         "legend_placement_quality": {
-          "description": "Whether legend placement avoids obstructing map regions.",
+          "description": "Whether legend placement avoids obstructing map regions and is easy to find.",
           "options": "good/bad",
           "rationale": {
-            "good": "Does not cover regions of interest",
-            "bad": "Obscures important map areas"
+            "good": "Legend is clearly visible, does not overlap any data region, and is positioned where the reader can reference it without difficulty",
+            "bad": "Legend overlaps data regions, is cropped or partially cut off, is placed far from the map, or is too small to read easily"
           }
         }
       },
       "title": {
         "title_quality": {
           "description": "Whether title clearly indicates subject and variables.",
-          "options": "good/bad/not applicable",
+          "options": "good/bad",
           "rationale": {
-            "good": "Clear subject indication, concise",
-            "bad": "Unclear, excessively long, or absent"
+            "good": "Title identifies the geographic scope, the variable being mapped, and the time period or date — all concisely",
+            "bad": "Title is missing, or fails to convey at least two of: geographic scope, variable, and time period. Also bad if the title is vague (e.g., just a country name), excessively long, or misleading."
           }
         },
         "subtitle_quality": {
           "description": "Whether subtitle meaningfully supplements title.",
           "options": "good/bad/not applicable",
           "rationale": {
-            "good": "Helpful clarification",
-            "bad": "Redundant or unhelpful"
+            "good": "Subtitle adds useful context not already in the title (e.g., data source, units, normalization method, or time period)",
+            "bad": "Subtitle merely repeats the title, is misleading, or adds irrelevant information",
+            "neutral": "not applicable — no subtitle, but the title already covers scope, variable, and time period adequately"
           }
         }
       },
       "source": {
         "source_quality": {
           "description": "Whether source is reputable, relevant, and recent.",
-          "options": "good/bad/not applicable",
+          "options": "good/bad",
           "rationale": {
-            "good": "Reliable, relevant, reasonably current source",
-            "bad": "Unreliable, irrelevant, or outdated"
+            "good": "Source is cited, comes from a reputable organisation, and is relevant to the mapped variable",
+            "bad": "No source is cited at all (always bad), or the cited source is unreliable, irrelevant to the topic, or clearly outdated for time-sensitive data"
           }
         }
       }
@@ -363,7 +411,7 @@ No additional text outside this JSON object is allowed.
         "legend_colors":  ~  
       },  
       "legend": {  
-        "legend_presence": ~  
+        "legend_presence": ~,  
         "legend_orientation": ~,
         "legend_placement": ~,  
         "frequency_labels": ~
@@ -423,8 +471,8 @@ No additional text outside this JSON object is allowed.
       }  
     }  
   },
-  "explanation": "<100-word explanation of the map contents with **main points**>",  
-  "map_quality": "<300-word evaluation of the map quality, readability, specificity and appropriacy (with regard to the intended audience and purpose) ,with **main points**>",  
-  "recommendations": "<150-word fix summary with **main points** or "none", if the map is bad>"  
+  "explanation": "<100-word explanation of the map contents with only meaningful key findings highlighted using **...**>",  
+  "map_quality": "<300-word evaluation of the map quality, readability, specificity and appropriacy. Must explicitly mention the intended audience and purpose when provided, with only meaningful quality judgments highlighted using **...**>",  
+  "recommendations": "<150-word fix summary tailored to the intended audience and purpose, with only specific recommended actions highlighted using **...** if any criteria are bad; exactly \"none\" only if no criteria are bad>"  
 }
 Ensure the final response is a valid JSON document in the structure shown.
