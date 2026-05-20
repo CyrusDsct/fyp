@@ -6,7 +6,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 UPLOAD_FOLDER = "uploads/maps"
 DATA_FOLDER = "uploads/data"
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "csv"}
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg"}
 FILE_STORAGE = {
     "csv": {
         "config_key": "DATA_FOLDER",
@@ -52,8 +52,8 @@ DEFAULT_OPENROUTER_MODELS = [
 ]
 
 
-def allowed_file(filename: str) -> bool:
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+def allowed_image_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
 def now_utc():
@@ -129,6 +129,33 @@ def _find_file_record(file_id: str) -> tuple[dict | None, Any | None]:
     return None, None
 
 
+def _delete_file_record(file_id: str) -> bool:
+    record, collection = _find_file_record(file_id)
+    if not record or collection is None:
+        return False
+
+    file_path = record.get("url", "").lstrip("/")
+    if file_path and os.path.exists(file_path):
+        os.remove(file_path)
+
+    collection.delete_one({"_id": record["_id"]})
+    return True
+
+
+def _cleanup_old_uploads() -> None:
+    retention_seconds = _get_env_int("UPLOAD_RETENTION_SECONDS", 3600)
+    if retention_seconds is None or retention_seconds <= 0:
+        return
+
+    cutoff = now_utc() - timedelta(seconds=retention_seconds)
+    for collection in FILE_COLLECTIONS:
+        for record in collection.find({"created_at": {"$lt": cutoff}}):
+            file_path = record.get("url", "").lstrip("/")
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+            collection.delete_one({"_id": record["_id"]})
+
+
 def _guess_mime_from_path(image_path: str) -> str:
     ext = os.path.splitext(image_path)[1].lower()
     if ext in [".jpg", ".jpeg"]:
@@ -175,6 +202,18 @@ def _split_env_list(name: str) -> list[str]:
     if not raw:
         return []
     return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _make_private_filename(original_filename: str) -> str:
+    ext = original_filename.rsplit(".", 1)[1].lower()
+    return f"{uuid.uuid4().hex}.{ext}"
 
 
 def _get_model_candidates() -> list[str]:
@@ -460,27 +499,26 @@ def _build_failure_result(
     started_at: float,
 ) -> dict:
     error_message = str(last_error) if last_error else "All model attempts failed."
-    results_collection.insert_one(
-        {
-            "trace_id": trace_id,
-            "image_id": image_id,
-            "analysis_raw": analysis_raw,
-            "parse_error": error_message,
-            "created_at": now_utc(),
-            "audience": audience,
-            "purpose": purpose,
-            "distribution": distribution,
-            "model_candidates": model_candidates,
-            "image_meta": image_meta,
-            "elapsed_s": round(time.time() - started_at, 3),
-            "status": "model_failed",
-        }
-    )
+    if _env_flag("STORE_ANALYSIS_RESULTS", default=False):
+        results_collection.insert_one(
+            {
+                "trace_id": trace_id,
+                "image_id": image_id,
+                "parse_error": error_message,
+                "created_at": now_utc(),
+                "audience": audience,
+                "purpose": purpose,
+                "distribution": distribution,
+                "model_candidates": model_candidates,
+                "image_meta": image_meta,
+                "elapsed_s": round(time.time() - started_at, 3),
+                "status": "model_failed",
+            }
+        )
     return {
         "status": "error",
         "error": error_message,
         "trace_id": trace_id,
-        "image_path": image_path,
         "model_candidates": model_candidates,
     }
 
@@ -501,35 +539,29 @@ def _build_success_result(
     analysis_json: dict,
     started_at: float,
 ) -> dict:
-    results_collection.insert_one(
-        {
-            "trace_id": trace_id,
-            "image_id": image_id,
-            "analysis": analysis_json,
-            "analysis_raw": analysis_raw,
-            "created_at": now_utc(),
-            "audience": audience,
-            "purpose": purpose,
-            "distribution": distribution,
-            "model": model_used,
-            "model_candidates": model_candidates,
-            "image_path": image_path,
-            "image_name": original_name,
-            "image_meta": image_meta,
-            "elapsed_s": round(time.time() - started_at, 3),
-            "status": "ok",
-        }
-    )
+    if _env_flag("STORE_ANALYSIS_RESULTS", default=False):
+        results_collection.insert_one(
+            {
+                "trace_id": trace_id,
+                "image_id": image_id,
+                "analysis": analysis_json,
+                "created_at": now_utc(),
+                "audience": audience,
+                "purpose": purpose,
+                "distribution": distribution,
+                "model": model_used,
+                "model_candidates": model_candidates,
+                "image_meta": image_meta,
+                "elapsed_s": round(time.time() - started_at, 3),
+                "status": "ok",
+            }
+        )
     return {
         "status": "success",
         "trace_id": trace_id,
         "analysis": analysis_json,
-        "analysis_raw": analysis_raw,
         "model_used": model_used,
         "model_candidates": model_candidates,
-        "image_path": image_path,
-        "image_name": original_name,
-        "image_meta": image_meta,
     }
 
 
@@ -578,10 +610,17 @@ def _call_and_parse_model(
     return analysis_raw, analysis_json
 
 
-def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribution: str, trace_id: str) -> dict:
-    api_key = os.getenv("OPENROUTER_API_KEY")
+def run_openrouter_analysis(
+    image_id: str,
+    audience: str,
+    purpose: str,
+    distribution: str,
+    trace_id: str,
+    api_key: str,
+) -> dict:
+    api_key = str(api_key or "").strip()
     if not api_key:
-        raise RuntimeError("Missing OPENROUTER_API_KEY")
+        raise RuntimeError("OpenRouter API key is required")
 
     model_candidates = _get_model_candidates()
     t0 = time.time()
@@ -661,6 +700,8 @@ def run_openrouter_analysis(image_id: str, audience: str, purpose: str, distribu
 @app.route("/uploadImage", methods=["POST"])
 def upload_image():
     try:
+        _cleanup_old_uploads()
+
         if "file" not in request.files:
             return jsonify({"status": "error", "message": "No file part"}), 400
 
@@ -668,22 +709,22 @@ def upload_image():
         if not file or not file.filename:
             return jsonify({"status": "error", "message": "Empty filename"}), 400
 
-        if not allowed_file(file.filename):
+        if not allowed_image_file(file.filename):
             return jsonify({"status": "error", "message": "Invalid file type"}), 400
 
-        filename = secure_filename(file.filename)
+        original_name = secure_filename(file.filename)
+        filename = _make_private_filename(original_name)
         storage_spec = _get_storage_spec(filename)
         save_dir = app.config[storage_spec["config_key"]]
-        url_path = f'{storage_spec["url_prefix"]}/{filename}'
         target_collection = db[storage_spec["collection_name"]]
 
         save_path = os.path.join(save_dir, filename)
         file.save(save_path)
 
-        doc = {"original_name": file.filename, "url": url_path, "created_at": now_utc()}
+        doc = {"original_name": original_name, "url": f'{storage_spec["url_prefix"]}/{filename}', "created_at": now_utc()}
         inserted_id = target_collection.insert_one(doc).inserted_id
 
-        return jsonify({"status": "success", "image_id": str(inserted_id), "url": doc["url"]}), 200
+        return jsonify({"status": "success", "image_id": str(inserted_id)}), 200
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -691,6 +732,9 @@ def upload_image():
 
 @app.route("/readImage", methods=["GET"])
 def read_images():
+    if not _env_flag("ENABLE_UPLOAD_LISTING", default=False):
+        return jsonify({"status": "error", "message": "upload listing is disabled"}), 404
+
     try:
         images = []
         for collection in FILE_COLLECTIONS:
@@ -704,20 +748,14 @@ def read_images():
 
 @app.route("/deleteImage/<image_id>", methods=["DELETE"])
 def delete_image(image_id):
+    if not _env_flag("ENABLE_UPLOAD_DELETE", default=False):
+        return jsonify({"status": "error", "message": "upload deletion is disabled"}), 404
+
     try:
-        img_data, target_collection = _find_file_record(image_id)
-        if not img_data:
+        if not _delete_file_record(image_id):
             return jsonify({"status": "error", "message": "Image not found in database"}), 404
 
-        file_path = img_data["url"].lstrip("/")
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-        result = target_collection.delete_one({"_id": img_data["_id"]})
-        if result.deleted_count > 0:
-            return jsonify({"status": "success", "message": "database record deleted successfully"}), 200
-
-        return jsonify({"status": "error", "message": "Delete failed"}), 500
+        return jsonify({"status": "success", "message": "file deleted successfully"}), 200
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -725,11 +763,15 @@ def delete_image(image_id):
 
 @app.route("/uploads/data/<filename>")
 def serve_data(filename):
+    if not _env_flag("ENABLE_UPLOAD_SERVING", default=False):
+        return jsonify({"status": "error", "message": "upload serving is disabled"}), 404
     return send_from_directory(app.config["DATA_FOLDER"], filename)
 
 
 @app.route("/uploads/maps/<filename>")
 def serve_image(filename):
+    if not _env_flag("ENABLE_UPLOAD_SERVING", default=False):
+        return jsonify({"status": "error", "message": "upload serving is disabled"}), 404
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
@@ -741,9 +783,12 @@ def analyze_sync():
         audience = payload.get("audience", "unknown")
         purpose = payload.get("purpose", "unknown")
         distribution = payload.get("distribution", "unknown")
+        openrouter_api_key = str(payload.get("openrouter_api_key") or "").strip()
 
         if not image_id:
             return jsonify({"status": "error", "error": "image_id is required"}), 400
+        if not openrouter_api_key:
+            return jsonify({"status": "error", "error": "OpenRouter API key is required"}), 400
 
         try:
             oid = _parse_object_id(image_id)
@@ -754,13 +799,18 @@ def analyze_sync():
             return jsonify({"status": "error", "error": "image not found"}), 404
 
         trace_id = f"sync_{uuid.uuid4().hex}"
-        result = run_openrouter_analysis(
-            image_id=image_id,
-            audience=audience,
-            purpose=purpose,
-            distribution=distribution,
-            trace_id=trace_id,
-        )
+        try:
+            result = run_openrouter_analysis(
+                image_id=image_id,
+                audience=audience,
+                purpose=purpose,
+                distribution=distribution,
+                trace_id=trace_id,
+                api_key=openrouter_api_key,
+            )
+        finally:
+            if not _env_flag("KEEP_UPLOADS_AFTER_ANALYSIS", default=False):
+                _delete_file_record(image_id)
         code = 200 if result.get("status") == "success" else 502
         return jsonify(result), code
 

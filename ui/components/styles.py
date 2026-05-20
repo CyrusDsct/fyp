@@ -280,6 +280,7 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
   color:var(--muted);
   margin:8px 0 10px;
 }
+
 hr{
   border:0; height:1px;
   background: rgba(17,24,39,0.14);
@@ -499,6 +500,38 @@ hr{
 }
 
 /* Restart button: same row as title */
+[data-testid="column"]:has(.top-key-marker),
+[data-testid="stColumn"]:has(.top-key-marker){
+  display:flex !important;
+  align-items:center !important;
+  min-width:0 !important;
+}
+
+[data-testid="stElementContainer"]:has(.top-key-marker){
+  height:0 !important;
+  min-height:0 !important;
+  max-height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+}
+
+[data-testid="column"]:has(.top-key-marker) [data-testid="stTextInput"],
+[data-testid="stColumn"]:has(.top-key-marker) [data-testid="stTextInput"]{
+  width:100% !important;
+}
+
+[data-testid="column"]:has(.top-key-marker) [data-testid="stTextInput"] input,
+[data-testid="stColumn"]:has(.top-key-marker) [data-testid="stTextInput"] input{
+  height:34px !important;
+  min-height:34px !important;
+  border-radius:10px !important;
+  border:1px solid #d7dbe1 !important;
+  background:#ffffff !important;
+  font-size:0.84rem !important;
+  font-weight:700 !important;
+}
+
 [data-testid="column"]:has(.restart-action-marker),
 [data-testid="stColumn"]:has(.restart-action-marker){
   display:flex !important;
@@ -614,7 +647,7 @@ hr{
   overflow:visible !important;
 }
 
-/* Left input tabs: equal widths + red required star on first tab only */
+/* Left input tabs: equal widths + red required star on Map tab */
 [data-testid="stTabs"]:first-of-type [data-baseweb="tab-list"] [data-baseweb="tab"]{
   flex:1 1 0 !important;
 }

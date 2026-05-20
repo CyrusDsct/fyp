@@ -32,6 +32,7 @@ SESSION_DEFAULTS = {
     "data_sig": None,
     "target_user": "",
     "map_purpose": "",
+    "openrouter_api_key": "",
     "csv_df": None,
     "selected_column": None,
     "is_numeric_column": None,
@@ -50,10 +51,11 @@ IDLE_PLACEHOLDER_HTML = (
     '<div class="right-placeholder">'
     '<div class="placeholder-guide">'
     '<div class="placeholder-title">How To Start</div>'
-    '<div class="placeholder-step"><span class="step-label">Step 1</span><span>Upload a map in the <b>Map</b> tab.</span></div>'
-    '<div class="placeholder-step"><span class="step-label">Step 2</span><span><span class="step-optional">Optional</span> Upload your data in the <b>Data</b> tab and select the corresponding column for binning analysis.</span></div>'
-    '<div class="placeholder-step"><span class="step-label">Step 3</span><span><span class="step-optional">Optional</span> Enter your <b>target audience</b> and <b>map purpose</b> in the <b>Context</b> tab for a more tailored evaluation.</span></div>'
-    '<div class="placeholder-step"><span class="step-label">Step 4</span><span>Click <span class="placeholder-action">Analyze</span> to see the results!</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 1</span><span>Add your OpenRouter key in the top bar.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 2</span><span>Upload a map in the <b>Map</b> tab.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 3</span><span><span class="step-optional">Optional</span> Upload your data in the <b>Data</b> tab and select the corresponding column for binning analysis.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 4</span><span><span class="step-optional">Optional</span> Enter your <b>target audience</b> and <b>map purpose</b> in the <b>Context</b> tab for a more tailored evaluation.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 5</span><span>Click <span class="placeholder-action">Analyze</span> to see the results.</span></div>'
     "</div>"
     "</div>"
 )
@@ -148,7 +150,7 @@ def render_context_section() -> None:
     )
     applied_audience = st.session_state.get("target_user") or "unknown"
     applied_purpose = st.session_state.get("map_purpose") or "unknown"
-    st.caption(f"Applied context: audience = **{applied_audience}**, purpose = **{applied_purpose}**")
+    # st.caption(f"Applied context: audience = **{applied_audience}**, purpose = **{applied_purpose}**")
 
 
 def get_analysis_json(status: str, result: dict | None):
@@ -202,8 +204,10 @@ def render_right_fallback_panel(status: str, result: dict | None, err: str | Non
 
 
 def reset_session():
+    openrouter_api_key = st.session_state.get("openrouter_api_key", "")
     for key, value in SESSION_DEFAULTS.items():
         st.session_state[key] = value
+    st.session_state["openrouter_api_key"] = openrouter_api_key
 
 
 init_state()
@@ -212,9 +216,18 @@ inject_global_padding(padding_top_rem=0.0, padding_bottom_rem=0.0)
 inject_base_css()
 inject_panel_height_js()
 
-title_col, restart_col = st.columns([8, 2], vertical_alignment="center")
+title_col, key_col, restart_col = st.columns([5.2, 3.2, 1.6], vertical_alignment="center")
 with title_col:
     st.markdown(TITLE_HTML, unsafe_allow_html=True)
+with key_col:
+    st.markdown('<span class="top-key-marker"></span>', unsafe_allow_html=True)
+    st.text_input(
+        "OpenRouter key",
+        key="openrouter_api_key",
+        type="password",
+        placeholder="OpenRouter key",
+        label_visibility="collapsed",
+    )
 with restart_col:
     st.markdown('<span class="restart-action-marker"></span>', unsafe_allow_html=True)
     if st.button("Restart analysis", type="secondary", key="restart_btn", width="stretch"):
@@ -239,12 +252,13 @@ with left_col:
         render_left_panel(render_context_section)
 
     has_map = bool(st.session_state.get("map_bytes"))
+    has_openrouter_key = bool(str(st.session_state.get("openrouter_api_key") or "").strip())
     btn_label = "Running..." if running else "Analyze"
     with st.container(border=False):
         st.markdown('<span class="left-analyze-dock-marker"></span>', unsafe_allow_html=True)
         clicked = st.button(
             btn_label,
-            disabled=(not has_map) or running,
+            disabled=(not has_map) or (not has_openrouter_key) or running,
             width="stretch",
             type="primary",
         )

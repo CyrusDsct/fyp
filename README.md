@@ -12,7 +12,7 @@ The current JSON fields and scoring criteria are documented in
 - Python 3.10 or newer
 - pip
 - MongoDB connection string
-- OpenRouter API key
+- User-provided OpenRouter API key
 
 ## Setup
 
@@ -46,10 +46,22 @@ Then fill in the required values:
 
 ```text
 MONGO_URI=...
-OPENROUTER_API_KEY=...
 ```
 
 The `.env` file is local only and should not be committed.
+OpenRouter keys are entered by users in the dashboard and are not stored in
+`.env`.
+
+For public/demo use, keep the privacy defaults disabled:
+
+```text
+STORE_ANALYSIS_RESULTS=false
+ENABLE_UPLOAD_LISTING=false
+ENABLE_UPLOAD_SERVING=false
+ENABLE_UPLOAD_DELETE=false
+KEEP_UPLOADS_AFTER_ANALYSIS=false
+UPLOAD_RETENTION_SECONDS=3600
+```
 
 ## Running
 
@@ -86,3 +98,30 @@ http://localhost:8501
   `load_dotenv()`.
 - The backend must stay running while the Streamlit dashboard calls the analysis
   API.
+- The dashboard requires each user to enter their own OpenRouter key before
+  analysis starts.
+- Uploaded maps use private random filenames. Upload listing and direct upload
+  serving are disabled unless explicitly enabled for local debugging. Uploaded
+  map files are deleted after each analysis by default, and abandoned uploads
+  are pruned by the retention setting.
+
+## Public Deployment
+
+For a real public URL, deploy `streamlit_app.py` on Streamlit Community Cloud
+from this GitHub repository.
+
+Recommended Community Cloud settings:
+
+- Repository: this repo
+- Branch: `main`
+- Main file path: `streamlit_app.py`
+- Python version: 3.12 or newer
+- Secrets: none required for OpenRouter
+
+The public Streamlit app does not use Flask, MongoDB, or the `uploads/` folder.
+Uploaded maps and CSV files are handled in Streamlit session memory only. Each
+user enters their own OpenRouter key, and the key is used only for the current
+analysis request.
+
+GitHub Pages is not enough for this app because it hosts static HTML/CSS/JS,
+not Python server code.

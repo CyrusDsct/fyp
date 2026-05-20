@@ -77,24 +77,23 @@ def _run_analysis_job(
     request_id: str,
     map_bytes: bytes,
     map_name: str,
-    existing_image_id: str | None,
     audience: str,
     purpose: str,
+    openrouter_api_key: str,
     distribution: str,
 ) -> dict:
     backend = get_backend()
 
-    image_id = existing_image_id
-    if not image_id:
-        image_id = backend.upload_image(
-            image_bytes=map_bytes,
-            filename=map_name or "map.png",
-        )
+    image_id = backend.upload_image(
+        image_bytes=map_bytes,
+        filename=map_name or "map.png",
+    )
 
     result = backend.analyze(
         image_id=image_id,
         audience=audience,
         purpose=purpose,
+        openrouter_api_key=openrouter_api_key,
         distribution=distribution,
     )
 
@@ -109,6 +108,10 @@ def start_analysis_sync() -> None:
     if not st.session_state.get("map_bytes"):
         raise RuntimeError("No map uploaded.")
 
+    openrouter_api_key = str(st.session_state.get("openrouter_api_key") or "").strip()
+    if not openrouter_api_key:
+        raise RuntimeError("OpenRouter API key is required.")
+
     request_id = uuid4().hex
 
     reset_analysis_state(status="running")
@@ -120,9 +123,9 @@ def start_analysis_sync() -> None:
         request_id,
         st.session_state["map_bytes"],
         st.session_state.get("map_name", "map.png"),
-        st.session_state.get("backend_image_id"),
         st.session_state.get("target_user") or "unknown",
         st.session_state.get("map_purpose") or "unknown",
+        openrouter_api_key,
         _selected_data_distribution_summary(),
     )
     st.session_state["analysis_future"] = future
@@ -147,7 +150,7 @@ def sync_analysis_state() -> None:
             _set_analysis_duration()
     else:
         if payload.get("request_id") == current_request_id:
-            st.session_state["backend_image_id"] = payload.get("image_id")
+            st.session_state["backend_image_id"] = None
             st.session_state["analysis_result"] = payload.get("result")
             _set_analysis_duration()
             st.session_state["analysis_status"] = "done"

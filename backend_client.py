@@ -24,6 +24,7 @@ class BackendClient:
         image_id: str,
         audience: str,
         purpose: str,
+        openrouter_api_key: str,
         distribution: str = "unknown",
     ) -> dict:
         url = f"{self.base_url}/analyze"
@@ -32,6 +33,7 @@ class BackendClient:
             "audience": audience,
             "purpose": purpose,
             "distribution": distribution,
+            "openrouter_api_key": openrouter_api_key,
         }
 
         try:
