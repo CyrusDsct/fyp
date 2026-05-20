@@ -7,7 +7,7 @@ from ui.components.scripts import inject_panel_height_js
 from ui.components.styles import inject_base_css, inject_global_padding
 from ui.sections.criteria import build_criteria_items, render_details_panel
 from ui.sections.evaluation import render_evaluation
-from ui.sections.start_analysis_sync import start_analysis_sync, sync_analysis_state
+from ui.sections.start_analysis_sync import start_analysis_sync, sync_analysis_state, use_memory_analysis
 from ui.sections.upload_data import render_data_section
 from ui.sections.upload_map import render_upload_map
 from utils.json_utils import try_parse_json_text
@@ -194,7 +194,8 @@ def render_right_fallback_panel(status: str, result: dict | None, err: str | Non
             st.markdown(_running_state_html(elapsed), unsafe_allow_html=True)
         elif status == "error":
             st.error(f"Analysis failed: {err or 'unknown error'}")
-            st.caption(f"Make sure Flask backend is running at {BACKEND_BASE}")
+            if not use_memory_analysis():
+                st.caption(f"Make sure Flask backend is running at {BACKEND_BASE}")
         elif status == "done":
             st.caption("AI output is not valid JSON. Showing raw response.")
             if result is not None:

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import streamlit as st
 
+from analysis_core import run_memory_openrouter_analysis
 from backend_client import BackendClient
 from utils.data_utils import coerce_numeric_series
 
@@ -14,6 +15,10 @@ _ANALYSIS_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 def get_backend() -> BackendClient:
     base_url = os.getenv("BACKEND_BASE", "http://127.0.0.1:5000")
     return BackendClient(base_url=base_url)
+
+
+def use_memory_analysis() -> bool:
+    return os.getenv("FIXOPLETH_ANALYSIS_MODE", "").strip().lower() == "memory"
 
 
 def reset_analysis_state(status: str = "idle") -> None:
@@ -82,6 +87,21 @@ def _run_analysis_job(
     openrouter_api_key: str,
     distribution: str,
 ) -> dict:
+    if use_memory_analysis():
+        result = run_memory_openrouter_analysis(
+            image_bytes=map_bytes,
+            image_name=map_name or "map.png",
+            audience=audience,
+            purpose=purpose,
+            distribution=distribution,
+            api_key=openrouter_api_key,
+        )
+        return {
+            "request_id": request_id,
+            "image_id": None,
+            "result": result,
+        }
+
     backend = get_backend()
 
     image_id = backend.upload_image(
