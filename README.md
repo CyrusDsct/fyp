@@ -1,20 +1,39 @@
 # Fixopleth
 
-Fixopleth is a small web application for reviewing choropleth maps. It has a
-Flask backend for file upload and AI analysis, and a Streamlit dashboard for the
-user interface.
+Fixopleth is the current Streamlit version of my FYP prototype for reviewing
+choropleth maps with AI assistance.
 
-The current JSON fields and scoring criteria are documented in
-`DATA_DICTIONARY.md`.
+This version focuses only on the Streamlit app. Browser extension work and
+static page deployment are not part of the current handover scope.
 
-## Requirements
+## Current Progress
 
-- Python 3.10 or newer
-- pip
-- MongoDB connection string
-- User-provided OpenRouter API key
+- The app UI is implemented in `dashboard.py`.
+- The public Streamlit entrypoint is `streamlit_app.py`.
+- Users upload a choropleth map image in the left panel.
+- Users can optionally upload CSV data and provide context about the target
+  audience and map purpose.
+- Users enter their own OpenRouter API key beside the `Analyze` button.
+- The OpenRouter key is kept in the Streamlit session and is not stored in the
+  repository or `.env`.
+- Analysis results are shown in the right panel as evaluation details.
 
-## Setup
+The main recent UI change is the OpenRouter key input position. It has been
+moved out of the top bar and placed beside the `Analyze` button, so the action
+area contains both controls in one row.
+
+## Main Files
+
+- `streamlit_app.py` - public Streamlit Cloud entrypoint.
+- `dashboard.py` - main Streamlit UI layout.
+- `analysis_core.py` - in-memory OpenRouter analysis path used by Streamlit
+  Cloud.
+- `ui/components/styles.py` - Streamlit UI styling and layout CSS.
+- `ui/sections/` - individual Streamlit UI sections.
+- `DATA_DICTIONARY.md` - JSON fields and scoring criteria.
+- `requirements.txt` - Python dependencies.
+
+## Run Locally
 
 Create and activate a virtual environment:
 
@@ -23,119 +42,56 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks activation, run this once in the same terminal:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
-```
-
-Install the dependencies:
+Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-Create a local `.env` file from the example:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Then fill in the required values:
-
-```text
-MONGO_URI=...
-```
-
-The `.env` file is local only and should not be committed.
-OpenRouter keys are entered by users in the dashboard and are not stored in
-`.env`.
-
-For public/demo use, keep the privacy defaults disabled:
-
-```text
-STORE_ANALYSIS_RESULTS=false
-ENABLE_UPLOAD_LISTING=false
-ENABLE_UPLOAD_SERVING=false
-ENABLE_UPLOAD_DELETE=false
-KEEP_UPLOADS_AFTER_ANALYSIS=false
-UPLOAD_RETENTION_SECONDS=3600
-```
-
-## Running
-
-Run the backend and dashboard in two separate terminals.
-
-Backend:
-
-```powershell
-python app.py
-```
-
-Default backend URL:
-
-```text
-http://127.0.0.1:5000
-```
-
-Dashboard with local Flask backend:
-
-```powershell
-streamlit run dashboard.py
-```
-
-Default dashboard URL:
-
-```text
-http://localhost:8501
-```
-
-Dashboard matching the public Streamlit Cloud app:
+Run the same Streamlit version used for public deployment:
 
 ```powershell
 streamlit run streamlit_app.py
 ```
 
-Use this entrypoint when checking the UI before deployment. It imports the same
-`dashboard.py` UI as localhost, but switches analysis to the in-memory
-OpenRouter path used on Streamlit Community Cloud.
+Default local URL:
 
-## Notes
+```text
+http://localhost:8501
+```
 
-- Keep `.env`, `.venv/`, `__pycache__/`, and `*.pyc` out of Git.
-- If environment variables are not being read, check that the entry scripts call
-  `load_dotenv()`.
-- The backend must stay running while the Streamlit dashboard calls the analysis
-  API.
-- The dashboard requires each user to enter their own OpenRouter key before
-  analysis starts.
-- Uploaded maps use private random filenames. Upload listing and direct upload
-  serving are disabled unless explicitly enabled for local debugging. Uploaded
-  map files are deleted after each analysis by default, and abandoned uploads
-  are pruned by the retention setting.
+## Streamlit Cloud Deployment
 
-## Public Deployment
+Current public app:
 
-For a real public URL, deploy `streamlit_app.py` on Streamlit Community Cloud
-from this GitHub repository.
+```text
+https://fixopleth.streamlit.app/
+```
 
-Recommended Community Cloud settings:
+Recommended Streamlit Cloud settings:
 
-- Repository: this repo
+- Repository: `CyrusDsct/fyp`
 - Branch: `main`
 - Main file path: `streamlit_app.py`
 - Python version: `3.12` recommended
 - Secrets: none required for OpenRouter
 
-The dependency file pins Streamlit to a version that installs cleanly on current
-Community Cloud images. If you see a `pyarrow` build failure, check the log for
-an unexpected Streamlit downgrade or Python version mismatch.
+Each user provides their own OpenRouter key in the app UI. The key is used only
+for the current analysis request.
 
-The public Streamlit app does not use Flask, MongoDB, or the `uploads/` folder.
-Uploaded maps and CSV files are handled in Streamlit session memory only. Each
-user enters their own OpenRouter key, and the key is used only for the current
-analysis request.
+## Notes For Supervisor
 
-GitHub Pages is not enough for this app because it hosts static HTML/CSS/JS,
-not Python server code.
+This handover version is intentionally scoped to the Streamlit app. The browser
+extension folder is not part of this current deliverable.
+
+The app currently prioritizes:
+
+- a single Streamlit interface for uploading a map,
+- optional CSV/context inputs,
+- user-provided OpenRouter key input,
+- AI evaluation output in the right panel,
+- deployability on Streamlit Community Cloud.
+
+The Flask backend files remain in the repository from earlier development, but
+the public Streamlit deployment uses `streamlit_app.py` and the in-memory
+analysis path, so Flask and MongoDB are not required for the current public demo.
