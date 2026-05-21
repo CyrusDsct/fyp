@@ -125,13 +125,12 @@ Recommended Community Cloud settings:
 - Repository: this repo
 - Branch: `main`
 - Main file path: `streamlit_app.py`
-- Python version: `3.12`
+- Python version: `3.12` recommended
 - Secrets: none required for OpenRouter
 
-Use Python 3.12 exactly for this deployment. Python 3.14 can fail while
-building `pyarrow`, which is pulled in by Streamlit. If an existing Community
-Cloud app was created with Python 3.14, delete that app and redeploy it with
-Python 3.12 selected in Advanced settings.
+The dependency file pins Streamlit to a version that installs cleanly on current
+Community Cloud images. If you see a `pyarrow` build failure, check the log for
+an unexpected Streamlit downgrade or Python version mismatch.
 
 The public Streamlit app does not use Flask, MongoDB, or the `uploads/` folder.
 Uploaded maps and CSV files are handled in Streamlit session memory only. Each

@@ -1,7 +1,7 @@
 Flask
 pymongo
 dnspython
-streamlit==1.51.0
+streamlit==1.57.0
 requests
 python-dotenv
 pandas
