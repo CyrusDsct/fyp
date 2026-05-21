@@ -51,7 +51,7 @@ IDLE_PLACEHOLDER_HTML = (
     '<div class="right-placeholder">'
     '<div class="placeholder-guide">'
     '<div class="placeholder-title">How To Start</div>'
-    '<div class="placeholder-step"><span class="step-label">Step 1</span><span>Add your OpenRouter key in the top bar.</span></div>'
+    '<div class="placeholder-step"><span class="step-label">Step 1</span><span>Add your OpenRouter key beside the Analyze button.</span></div>'
     '<div class="placeholder-step"><span class="step-label">Step 2</span><span>Upload a map in the <b>Map</b> tab.</span></div>'
     '<div class="placeholder-step"><span class="step-label">Step 3</span><span><span class="step-optional">Optional</span> Upload your data in the <b>Data</b> tab and select the corresponding column for binning analysis.</span></div>'
     '<div class="placeholder-step"><span class="step-label">Step 4</span><span><span class="step-optional">Optional</span> Enter your <b>target audience</b> and <b>map purpose</b> in the <b>Context</b> tab for a more tailored evaluation.</span></div>'
@@ -217,18 +217,9 @@ inject_global_padding(padding_top_rem=0.0, padding_bottom_rem=0.0)
 inject_base_css()
 inject_panel_height_js()
 
-title_col, key_col, restart_col = st.columns([5.2, 3.2, 1.6], vertical_alignment="center")
+title_col, restart_col = st.columns([8.4, 1.6], vertical_alignment="center")
 with title_col:
     st.markdown(TITLE_HTML, unsafe_allow_html=True)
-with key_col:
-    st.markdown('<span class="top-key-marker"></span>', unsafe_allow_html=True)
-    st.text_input(
-        "OpenRouter key",
-        key="openrouter_api_key",
-        type="password",
-        placeholder="OpenRouter key",
-        label_visibility="collapsed",
-    )
 with restart_col:
     st.markdown('<span class="restart-action-marker"></span>', unsafe_allow_html=True)
     if st.button("Restart analysis", type="secondary", key="restart_btn", width="stretch"):
@@ -257,12 +248,22 @@ with left_col:
     btn_label = "Running..." if running else "Analyze"
     with st.container(border=False):
         st.markdown('<span class="left-analyze-dock-marker"></span>', unsafe_allow_html=True)
-        clicked = st.button(
-            btn_label,
-            disabled=(not has_map) or (not has_openrouter_key) or running,
-            width="stretch",
-            type="primary",
-        )
+        key_input_col, analyze_btn_col = st.columns([2.4, 1], gap="small", vertical_alignment="center")
+        with key_input_col:
+            st.text_input(
+                "OpenRouter key",
+                key="openrouter_api_key",
+                type="password",
+                placeholder="OpenRouter key",
+                label_visibility="collapsed",
+            )
+        with analyze_btn_col:
+            clicked = st.button(
+                btn_label,
+                disabled=(not has_map) or (not has_openrouter_key) or running,
+                width="stretch",
+                type="primary",
+            )
         st.markdown('<div class="left-analyze-spacer"></div>', unsafe_allow_html=True)
 
     if clicked:

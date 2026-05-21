@@ -239,6 +239,39 @@ h1,h2,h3{ margin-top:0 !important; margin-bottom:0.30rem !important; }
 }
 
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stHorizontalBlock"]{
+  align-items:center !important;
+  gap:8px !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="column"],
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stColumn"]{
+  display:flex !important;
+  align-items:center !important;
+  min-width:0 !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stTextInput"]{
+  width:100% !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
+  > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stTextInput"] input{
+  height:34px !important;
+  min-height:34px !important;
+  border-radius:10px !important;
+  border:1px solid #d7dbe1 !important;
+  background:#ffffff !important;
+  font-size:0.84rem !important;
+  font-weight:700 !important;
+}
+
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .left-col-marker)
   > [data-testid="stElementContainer"]:has(.left-analyze-dock-marker) [data-testid="stElementContainer"]:has(.left-analyze-dock-marker){
   height:0 !important;
   min-height:0 !important;

@@ -79,7 +79,7 @@ Default backend URL:
 http://127.0.0.1:5000
 ```
 
-Dashboard:
+Dashboard with local Flask backend:
 
 ```powershell
 streamlit run dashboard.py
@@ -90,6 +90,16 @@ Default dashboard URL:
 ```text
 http://localhost:8501
 ```
+
+Dashboard matching the public Streamlit Cloud app:
+
+```powershell
+streamlit run streamlit_app.py
+```
+
+Use this entrypoint when checking the UI before deployment. It imports the same
+`dashboard.py` UI as localhost, but switches analysis to the in-memory
+OpenRouter path used on Streamlit Community Cloud.
 
 ## Notes
 
@@ -115,8 +125,13 @@ Recommended Community Cloud settings:
 - Repository: this repo
 - Branch: `main`
 - Main file path: `streamlit_app.py`
-- Python version: 3.12 or newer
+- Python version: `3.12`
 - Secrets: none required for OpenRouter
+
+Use Python 3.12 exactly for this deployment. Python 3.14 can fail while
+building `pyarrow`, which is pulled in by Streamlit. If an existing Community
+Cloud app was created with Python 3.14, delete that app and redeploy it with
+Python 3.12 selected in Advanced settings.
 
 The public Streamlit app does not use Flask, MongoDB, or the `uploads/` folder.
 Uploaded maps and CSV files are handled in Streamlit session memory only. Each
