@@ -1,6 +1,6 @@
 # Fixopleth Data Dictionary
 
-This dictionary reflects the current implementation in `prompt.txt`, `ui/sections/criteria.py`, and `ui/sections/evaluation.py`.
+This dictionary reflects the current implementation in `docs/specifications/prompt.txt`, `frontend/streamlit/ui/sections/criteria.py`, and `frontend/streamlit/ui/sections/evaluation.py`.
 
 Current output structure:
 

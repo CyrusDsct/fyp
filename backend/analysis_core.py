@@ -25,6 +25,8 @@ DEFAULT_OPENROUTER_MODELS = [
 _CODE_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
 _FIRST_JSON_OBJ_RE = re.compile(r"\{.*\}", re.DOTALL)
 _RANGE_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PROMPT_PATH = PROJECT_ROOT / "docs" / "specifications" / "prompt.txt"
 
 
 def _get_env_int(name: str, default: Optional[int] = None) -> Optional[int]:
@@ -74,7 +76,9 @@ def get_model_candidates() -> list[str]:
 
 
 def load_prompt_template() -> str:
-    prompt_path = Path(os.getenv("PROMPT_PATH", "prompt.txt"))
+    prompt_path = Path(os.getenv("PROMPT_PATH", str(DEFAULT_PROMPT_PATH)))
+    if not prompt_path.is_absolute():
+        prompt_path = PROJECT_ROOT / prompt_path
     if not prompt_path.exists():
         raise RuntimeError(f"prompt file not found: {prompt_path.resolve()}")
     return prompt_path.read_text(encoding="utf-8").strip()

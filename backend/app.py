@@ -21,6 +21,8 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_PROMPT_PATH = PROJECT_ROOT / "docs" / "specifications" / "prompt.txt"
 UPLOAD_FOLDER = "uploads/maps"
 DATA_FOLDER = "uploads/data"
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg"}
@@ -74,11 +76,13 @@ data_collection = db["map_data"]
 FILE_COLLECTIONS = (images_collection, data_collection)
 
 
-PROMPT_PATH = os.getenv("PROMPT_PATH", "prompt.txt")
+PROMPT_PATH = os.getenv("PROMPT_PATH", str(DEFAULT_PROMPT_PATH))
 
 
 def load_prompt_template() -> str:
     p = Path(PROMPT_PATH)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
     if not p.exists():
         raise RuntimeError(f"prompt file not found: {p.resolve()}")
     return p.read_text(encoding="utf-8").strip()

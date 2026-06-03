@@ -4,7 +4,7 @@ import io
 import pandas as pd
 import streamlit as st
 
-from ui.sections.plot_disturbution import plot_distribution
+from ui.sections.plot_distribution import plot_distribution
 from utils.data_utils import coerce_numeric_series
 
 

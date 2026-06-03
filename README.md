@@ -1,43 +1,48 @@
 # Fixopleth
 
-Fixopleth is the current Streamlit version of my FYP prototype for reviewing
-choropleth maps with AI assistance.
+Fixopleth is a map auditing tool for reviewing choropleth maps with AI-assisted extraction, validation, and feedback. The current application lets users upload a map image, optionally add CSV data and map context, and receive structured feedback about map quality, binning, labeling, color use, and missing information.
 
-This handover version focuses on the Streamlit app code only.
+## Repository Layout
 
-## Current Progress
+```text
+backend/
+  app.py                  Optional Flask API for file upload and persisted analysis.
+  analysis_core.py        OpenRouter analysis flow used by Streamlit Cloud.
+  backend_client.py       Client used by the Streamlit UI when calling the Flask API.
+  analysis_helper.py      Shared analysis helpers.
 
-- The main Streamlit UI is implemented in `dashboard.py`.
-- The app entrypoint is `streamlit_app.py`.
-- Users can upload a choropleth map image in the left panel.
-- Users can optionally upload CSV data for binning-related checks.
-- Users can optionally provide target audience and map purpose context.
-- Users enter their own OpenRouter API key in the control row beside the
-  `Analyze` button.
-- The OpenRouter key input is positioned on the left side of the `Analyze`
-  button.
-- The OpenRouter key is kept in the Streamlit session and is not stored in the
-  repository.
-- Analysis output is shown in the right panel.
+frontend/streamlit/
+  streamlit_app.py        Streamlit application entrypoint.
+  dashboard.py            Main Streamlit layout and interaction flow.
+  ui/                     Streamlit components and page sections.
+  utils/                  Frontend data and JSON helpers.
+  binning/                Binning algorithms and similarity calculations used by the UI.
 
-The main UI change in this version is the OpenRouter key input position. The
-key field was moved out of the top bar and placed directly to the left of the
-`Analyze` button, so the user can enter the key immediately before starting
-analysis.
+docs/specifications/
+  DATA_DICTIONARY.md      Expected analysis fields and scoring criteria.
+  prompt.txt              Main model prompt used by the Python analysis flow.
 
-## Main Files
+examples/
+  data/                   Sample CSV datasets.
+  reports/                Example generated binning reports.
 
-- `streamlit_app.py` - Streamlit app entrypoint.
-- `dashboard.py` - main Streamlit UI layout.
-- `analysis_core.py` - in-memory OpenRouter analysis flow.
-- `ui/components/styles.py` - Streamlit layout and styling.
-- `ui/sections/` - individual Streamlit UI sections.
-- `DATA_DICTIONARY.md` - expected JSON fields and scoring criteria.
-- `requirements.txt` - Python dependencies.
+tests/
+  test_analysis_core.py   Smoke and unit checks for core analysis helpers.
 
-## Run Locally
+.github/workflows/
+  ci.yml                  Basic Python compile and test workflow.
 
-Create and activate a virtual environment:
+requirements.txt          Python dependencies.
+.python-version           Python runtime version hint.
+.env.example              Environment variable template.
+.streamlit/config.toml    Streamlit deployment and theme configuration.
+streamlit_app.py          Root launcher for Streamlit deployment platforms.
+CONTRIBUTING.md           Contribution and local development guide.
+```
+
+## Run The Streamlit App
+
+Create and activate a virtual environment from the repository root:
 
 ```powershell
 python -m venv .venv
@@ -56,23 +61,58 @@ Run the Streamlit app:
 streamlit run streamlit_app.py
 ```
 
-Default local URL:
+The default local URL is:
 
 ```text
 http://localhost:8501
 ```
 
-## Notes For Supervisor
+Users provide their own OpenRouter API key in the Streamlit interface. The key is kept in Streamlit session state and is not stored in the repository.
 
-This version is intended as a clean Streamlit handover point. The current focus
-is:
+## Optional Flask Backend
 
-- a single Streamlit interface for map upload and review,
-- optional CSV and context inputs,
-- user-provided OpenRouter key input beside the `Analyze` button,
-- AI evaluation results displayed in the right panel.
+The Streamlit Cloud path uses the in-memory analysis flow in `backend/analysis_core.py`, so it does not require Flask, MongoDB, or local uploads.
 
-Earlier backend files remain in the repository from development, but the current
-Streamlit version runs through `streamlit_app.py` and uses the in-memory
-analysis flow. Users provide their own OpenRouter key in the UI for each
-analysis request.
+The legacy Flask API remains available for local or server-backed workflows:
+
+```powershell
+python backend\app.py
+```
+
+The Flask backend requires a configured `.env` file based on `.env.example`, including `MONGO_URI`. Uploaded files are written under `uploads/`, which is ignored by git.
+
+## Security And Privacy
+
+Fixopleth does not store the OpenRouter API key in the repository. In the Streamlit app, users enter their own key in the interface and the key is kept in session state for the current analysis flow.
+
+Uploaded maps and optional CSV data are sent to OpenRouter for model analysis. Users should avoid uploading confidential or sensitive data unless they have reviewed the relevant data handling policies.
+
+See `SECURITY.md` and `PRIVACY.md` for more details.
+
+## License
+
+The software is available under the MIT License. See `LICENSE` for details.
+
+## Contact
+
+If you have any questions, feel free to open an issue or contact the Fixopleth maintainers.
+
+## Development Checks
+
+Run the lightweight checks before opening a pull request:
+
+```powershell
+$files = Get-ChildItem backend,frontend\streamlit -Recurse -File -Filter *.py | Where-Object { $_.FullName -notmatch '__pycache__' } | ForEach-Object { $_.FullName }
+python -m py_compile streamlit_app.py @files
+python -m unittest discover tests
+```
+
+## Roadmap
+
+- Add user testing tasks and issue templates.
+- Improve corrected previews for detected map issues.
+- Support additional map types beyond choropleth maps.
+- Add dataset validation for uploaded CSV files.
+- Strengthen computer vision and OCR extraction.
+- Explore browser extension support as a later-stage feature with compact panel layouts and automated map-region capture.
+- Review sample datasets and generated reports for redistribution rights before packaging formal releases.
