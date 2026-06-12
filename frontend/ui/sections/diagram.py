@@ -5,10 +5,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from front.binning.algorithms import BIN_METHODS
-from front.binning.similarity import composite_similarity_details
-from front.utils.data_utils import coerce_numeric_series
-from front.utils.json_utils import try_parse_json_text
+from frontend.binning.algorithms import BIN_METHODS
+from frontend.binning.similarity import composite_similarity_details
+from frontend.utils.data_utils import coerce_numeric_series
+from frontend.utils.json_utils import try_parse_json_text
 
 
 EXCLUDED_COMPARISON_METHODS = {"Defined Interval"}

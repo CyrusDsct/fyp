@@ -22,7 +22,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROMPT_PATH = PROJECT_ROOT / "docs" / "specifications" / "prompt.txt"
+DEFAULT_PROMPT_PATH = PROJECT_ROOT / "docs" / "prompt.txt"
 UPLOAD_FOLDER = "uploads/maps"
 DATA_FOLDER = "uploads/data"
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg"}

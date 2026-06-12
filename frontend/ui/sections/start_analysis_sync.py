@@ -7,7 +7,7 @@ import streamlit as st
 
 from backend.analysis_core import run_memory_openrouter_analysis
 from backend.backend_client import BackendClient
-from front.utils.data_utils import coerce_numeric_series
+from frontend.utils.data_utils import coerce_numeric_series
 
 _ANALYSIS_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 

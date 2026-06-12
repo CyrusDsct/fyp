@@ -3,14 +3,14 @@ import time
 
 import streamlit as st
 
-from front.ui.components.scripts import inject_panel_height_js
-from front.ui.components.styles import inject_base_css, inject_global_padding
-from front.ui.sections.criteria import build_criteria_items, render_details_panel
-from front.ui.sections.evaluation import render_evaluation
-from front.ui.sections.start_analysis_sync import start_analysis_sync, sync_analysis_state, use_memory_analysis
-from front.ui.sections.upload_data import render_data_section
-from front.ui.sections.upload_map import render_upload_map
-from front.utils.json_utils import try_parse_json_text
+from frontend.ui.components.scripts import inject_panel_height_js
+from frontend.ui.components.styles import inject_base_css, inject_global_padding
+from frontend.ui.sections.criteria import build_criteria_items, render_details_panel
+from frontend.ui.sections.evaluation import render_evaluation
+from frontend.ui.sections.start_analysis_sync import start_analysis_sync, sync_analysis_state, use_memory_analysis
+from frontend.ui.sections.upload_data import render_data_section
+from frontend.ui.sections.upload_map import render_upload_map
+from frontend.utils.json_utils import try_parse_json_text
 
 BACKEND_BASE = "http://127.0.0.1:5000"
 LEFT_PANEL_HEIGHT = 500

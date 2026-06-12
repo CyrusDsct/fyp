@@ -26,7 +26,7 @@ _CODE_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
 _FIRST_JSON_OBJ_RE = re.compile(r"\{.*\}", re.DOTALL)
 _RANGE_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROMPT_PATH = PROJECT_ROOT / "docs" / "specifications" / "prompt.txt"
+DEFAULT_PROMPT_PATH = PROJECT_ROOT / "docs" / "prompt.txt"
 
 
 def _get_env_int(name: str, default: Optional[int] = None) -> Optional[int]:
