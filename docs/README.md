@@ -22,7 +22,11 @@ docs/
   examples/
     data/                 Sample CSV datasets.
     reports/              Example generated binning reports.
+  CONTRIBUTING.md         Contribution and local development guide.
   DATA_DICTIONARY.md      Expected analysis fields and scoring criteria.
+  PRIVACY.md              Detailed privacy policy and related use guidelines.
+  README.md               This file, containing basic use information.
+  SECURITY.md             Detailed security policy.
   prompt.txt              Main model prompt used by the Python analysis flow.
 
 tests/
@@ -31,13 +35,8 @@ tests/
 .github/
   workflows/
     ci.yml                Basic Python compile and test workflow.
-  CONTRIBUTING.md         Contribution and local development guide.
-  LICENSE                 Detailed use license information.
-  PRIVACY.md              Detailed privacy policy and related use guidelines.
-  README.md               This file, containing basic use information.
-  SECURITY.md             Detailed security policy.
 
-
+LICENSE                 Detailed use license information.
 requirements.txt          Python dependencies.
 .python-version           Python runtime version hint.
 .env.example              Environment variable template.
