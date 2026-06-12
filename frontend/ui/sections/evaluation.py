@@ -2,7 +2,7 @@ import streamlit as st
 import html
 import re
 
-from ui.sections import criteria as criteria_section
+from front.ui.sections import criteria as criteria_section
 
 
 def _summary_text(analysis_json: dict, key: str, fallback: str = "Not available.") -> str:

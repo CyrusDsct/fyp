@@ -11,33 +11,39 @@ backend/
   backend_client.py       Client used by the Streamlit UI when calling the Flask API.
   analysis_helper.py      Shared analysis helpers.
 
-frontend/streamlit/
+frontend/
   streamlit_app.py        Streamlit application entrypoint.
   dashboard.py            Main Streamlit layout and interaction flow.
   ui/                     Streamlit components and page sections.
   utils/                  Frontend data and JSON helpers.
   binning/                Binning algorithms and similarity calculations used by the UI.
 
-docs/specifications/
+docs/
+  examples/
+    data/                 Sample CSV datasets.
+    reports/              Example generated binning reports.
   DATA_DICTIONARY.md      Expected analysis fields and scoring criteria.
   prompt.txt              Main model prompt used by the Python analysis flow.
-
-examples/
-  data/                   Sample CSV datasets.
-  reports/                Example generated binning reports.
 
 tests/
   test_analysis_core.py   Smoke and unit checks for core analysis helpers.
 
-.github/workflows/
-  ci.yml                  Basic Python compile and test workflow.
+.github/
+  workflows/
+    ci.yml                Basic Python compile and test workflow.
+  CONTRIBUTING.md         Contribution and local development guide.
+  LICENSE                 Detailed use license information.
+  PRIVACY.md              Detailed privacy policy and related use guidelines.
+  README.md               This file, containing basic use information.
+  SECURITY.md             Detailed security policy.
+
 
 requirements.txt          Python dependencies.
 .python-version           Python runtime version hint.
 .env.example              Environment variable template.
 .streamlit/config.toml    Streamlit deployment and theme configuration.
 streamlit_app.py          Root launcher for Streamlit deployment platforms.
-CONTRIBUTING.md           Contribution and local development guide.
+
 ```
 
 ## Run The Streamlit App

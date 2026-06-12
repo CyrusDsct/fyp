@@ -437,7 +437,7 @@ def render_details_panel(analysis_json: dict, items: list):
 
     with binning_tab:
         if binning_available:
-            from ui.sections.diagram import render_binning_details
+            from front.ui.sections.diagram import render_binning_details
 
             render_binning_details(analysis_json)
         else:

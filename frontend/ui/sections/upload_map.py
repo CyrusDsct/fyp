@@ -4,7 +4,7 @@ import io
 import streamlit as st
 from PIL import Image
 
-from ui.sections.start_analysis_sync import reset_analysis_state
+from front.ui.sections.start_analysis_sync import reset_analysis_state
 
 
 def _store_uploaded_map(map_file) -> None:

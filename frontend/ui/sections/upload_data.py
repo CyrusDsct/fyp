@@ -4,8 +4,8 @@ import io
 import pandas as pd
 import streamlit as st
 
-from ui.sections.plot_distribution import plot_distribution
-from utils.data_utils import coerce_numeric_series
+from front.ui.sections.plot_distribution import plot_distribution
+from front.utils.data_utils import coerce_numeric_series
 
 
 def _read_uploaded_csv(data_bytes: bytes) -> pd.DataFrame:
